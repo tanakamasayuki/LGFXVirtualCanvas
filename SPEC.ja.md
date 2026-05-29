@@ -315,6 +315,8 @@ void setup() {
 3. 描画 callback を呼ぶ。
 4. タイル内容を実パネルへ `pushSprite(0, offsetY)` で転送する。最終タイルが端数高さの場合、sprite 下端の余剰行はパネル側 clip で捨てられる。
 
+ループ全体のパネル転送は1回の `startWrite()`／`endWrite()` で囲み、N 回の転送を1トランザクションに束ねる（実機 SPI の設定/CS トグル削減。タイルへの描画はメモリ操作でバス転送が無いため draw 側の囲いは不要。バス無しの host では no-op）。`LGFXVirtualSprite` の場合は転送先が `(x, y)`、push 前にパネル clip を `(x, y, w, h)` に設定する（§7.1）。
+
 ## 11. タイル初期化（auto-clear）と fillScreen
 
 ### 11.1 auto-clear（タイルの初期状態）

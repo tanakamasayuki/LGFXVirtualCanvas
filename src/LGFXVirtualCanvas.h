@@ -251,6 +251,12 @@ protected:
             if (!beginRegion(regionW, regionH))
                 return false; // not ready → draw nothing (SPEC §10.3)
         }
+        // Batch all tile transfers into one bus transaction. Drawing into the
+        // tile sprite is memory-only (no bus), so only the per-tile pushSprite
+        // to the panel benefits — holding one startWrite/endWrite around the
+        // loop avoids N transaction setups on real hardware. (No-op on the
+        // bus-less host backend.)
+        _panel->startWrite();
         _panel->setClipRect(posX, posY, _regionW, _regionH);
         for (int i = 0; i < _tileCount; ++i)
         {
@@ -262,6 +268,7 @@ protected:
             _tile.pushSprite(_panel, posX, posY + offsetY);
         }
         _panel->clearClipRect();
+        _panel->endWrite();
         return true;
     }
 

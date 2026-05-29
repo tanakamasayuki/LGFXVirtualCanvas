@@ -315,6 +315,8 @@ For each tile `i` (`0..N-1`, `offsetY = i * tileH`):
 3. Call the draw callback.
 4. Push the tile content to the real panel with `pushSprite(0, offsetY)`. For a partial last tile, the surplus rows at the bottom of the sprite are discarded by the panel's clip.
 
+The whole loop's panel transfers are wrapped in a single `startWrite()` / `endWrite()`, batching the N pushes into one bus transaction (fewer SPI transaction setups / CS toggles on real hardware). Drawing into the tile is memory-only (no bus), so the draw callback itself needs no such bracketing. No-op on the bus-less host backend. For `LGFXVirtualSprite` the transfer target is `(x, y)` and the panel clip is set to `(x, y, w, h)` before pushing (§7.1).
+
 ## 11. Tile initialization (auto-clear) and fillScreen
 
 ### 11.1 auto-clear (the tile's initial state)
