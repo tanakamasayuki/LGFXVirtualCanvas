@@ -1,8 +1,12 @@
-"""Shared pytest hooks for PCMFlowOpus tests.
+"""Shared pytest hooks for LGFXVirtualCanvas tests.
 
-Mirrors the parent PCMFlow `tests/conftest.py` — wipes the per-test
-`output/` directory before each test so host-profile artifacts don't
-leak across runs. See the parent docs for the full rationale.
+Wipes the per-test `output/` directory before each test so host-profile
+artifacts (PNG captures) don't leak across runs and a stale file can't
+make a failing sketch look like it passed.
+
+Note: this is only the output-wipe hook. The host-arduino-core conftest
+also has a session-scoped symlink fixture for its develop-against-the-
+working-tree workflow; we intentionally do NOT copy that here.
 """
 
 import shutil
