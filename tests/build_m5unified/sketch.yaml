@@ -3,7 +3,8 @@ profiles:
     fqbn: lang-ship:host:host:mode=lgfx
     port: socket://localhost
     platforms:
-      - platform: lang-ship:host
+      - platform: lang-ship:host (1.2.0)
+        platform_index_url: https://tanakamasayuki.github.io/lang-ship-arduino-core/package_lang-ship_index.json
     libraries:
       - M5Unified (0.2.16)
       - M5GFX (0.2.22)
