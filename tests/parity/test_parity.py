@@ -12,6 +12,7 @@ SCENES = [
     "shapes",
     "circles",
     "text",
+    "text2",
     "boundary",
     "clipping",
     "fuzz",

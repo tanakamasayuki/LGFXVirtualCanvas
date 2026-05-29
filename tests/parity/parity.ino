@@ -95,6 +95,22 @@ static void sceneText(LGFXVirtualCanvas &g) // T1-4
     g.printf("printf %d %s", 42, "x");
 }
 
+static void sceneText2(LGFXVirtualCanvas &g) // T1-4: centre/right + numeric print
+{
+    const int W = g.width(), H = g.height();
+    g.fillScreen(TFT_BLACK);
+    g.setTextColor(TFT_WHITE);
+    g.drawString("left", 0, 4);
+    g.drawCentreString("centre", W / 2, H / 2 - 8);
+    g.drawRightString("right", W, H - 16);
+    g.setCursor(4, 30);
+    g.print(42);
+    g.print(' ');
+    g.print(255, 16); // hex
+    g.println();
+    g.println(3.14);
+}
+
 static void sceneBoundary(LGFXVirtualCanvas &g) // T1-5
 {
     const int W = g.width(), H = g.height();
@@ -176,6 +192,7 @@ static const Scene scenes[] = {
     {"shapes", sceneShapes},
     {"circles", sceneCircles},
     {"text", sceneText},
+    {"text2", sceneText2},
     {"boundary", sceneBoundary},
     {"clipping", sceneClipping},
     {"fuzz", sceneFuzz},

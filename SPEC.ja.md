@@ -202,7 +202,9 @@ bool render(void (*draw)(LGFXVirtualCanvas& g, T& ctx), T& ctx); // 型付き ct
 - `printf`
 - `pushImage`
 
-color を取るメソッドは color 引数の型をテンプレートで保存し、内部 sprite へそのまま転送する（型保存のための薄い sugar。§5.4）。
+color を取るメソッドは color 引数の型をテンプレートで保存し、内部 sprite へそのまま転送する（型保存のための薄い sugar。§5.4）。文字列を取るメソッド（`drawString` 系）は string 型（`const char*` / `String`）と font 引数（`uint8_t` / `IFont*`）をテンプレートで受け、`print` / `println` は数値・基数指定等 Arduino Print の全 overload を generic に転送する。
+
+> 実装状況：**上記の優先メソッドは v0.1 時点ですべて実装済み**（parity / pushimage テストで検証）。`setTextColor` / `setTextSize` / `setTextDatum` / `setCursor` / `getCursorX/Y`（仮想座標で返す）も提供。
 
 ## 9. 特に注意する API
 

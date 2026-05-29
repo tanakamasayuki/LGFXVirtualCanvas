@@ -90,12 +90,35 @@ public:
     void setTextSize(float size) { _tile.setTextSize(size); }
     void setTextDatum(textdatum_t datum) { _tile.setTextDatum(datum); }
 
-    template <typename T>
-    int32_t drawString(const char *str, int32_t x, int32_t y, const T &font) { return _tile.drawString(str, x, y - _offsetY, font); }
-    int32_t drawString(const char *str, int32_t x, int32_t y) { return _tile.drawString(str, x, y - _offsetY); }
+    // drawString / drawCentreString / drawRightString. The string type is
+    // templated to accept const char* and String; the optional font argument
+    // accepts a built-in font index (uint8_t) or an IFont*.
+    template <typename S>
+    size_t drawString(const S &str, int32_t x, int32_t y) { return _tile.drawString(str, x, y - _offsetY); }
+    template <typename S, typename F>
+    size_t drawString(const S &str, int32_t x, int32_t y, const F &font) { return _tile.drawString(str, x, y - _offsetY, font); }
 
-    size_t print(const char *s) { return _tile.print(s); }
-    size_t println(const char *s) { return _tile.println(s); }
+    template <typename S>
+    size_t drawCentreString(const S &str, int32_t x, int32_t y) { return _tile.drawCentreString(str, x, y - _offsetY); }
+    template <typename S, typename F>
+    size_t drawCentreString(const S &str, int32_t x, int32_t y, const F &font) { return _tile.drawCentreString(str, x, y - _offsetY, font); }
+
+    template <typename S>
+    size_t drawRightString(const S &str, int32_t x, int32_t y) { return _tile.drawRightString(str, x, y - _offsetY); }
+    template <typename S, typename F>
+    size_t drawRightString(const S &str, int32_t x, int32_t y, const F &font) { return _tile.drawRightString(str, x, y - _offsetY, font); }
+
+    // print / println forward to the tile; the (already offset) cursor advances
+    // in tile-local space. Templated to cover all Arduino Print / LGFX overloads
+    // (const char*, String, numbers with optional base, etc.).
+    template <typename T>
+    size_t print(const T &v) { return _tile.print(v); }
+    template <typename T>
+    size_t print(const T &v, int base) { return _tile.print(v, base); }
+    template <typename T>
+    size_t println(const T &v) { return _tile.println(v); }
+    template <typename T>
+    size_t println(const T &v, int base) { return _tile.println(v, base); }
     size_t println(void) { return _tile.println(); }
 
     int printf(const char *format, ...)
