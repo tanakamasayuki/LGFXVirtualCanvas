@@ -6,5 +6,7 @@ profiles:
       - platform: lang-ship:host
     libraries:
       - LovyanGFX (1.2.21)
+      - dir: ../../
+      - dir: ../common_libs/vc_scene
 
 default_profile: host

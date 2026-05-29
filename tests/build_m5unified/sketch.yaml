@@ -5,6 +5,9 @@ profiles:
     platforms:
       - platform: lang-ship:host
     libraries:
+      - M5Unified (0.2.16)
       - M5GFX (0.2.22)
+      - dir: ../../
+      - dir: ../common_libs/vc_scene
 
 default_profile: host

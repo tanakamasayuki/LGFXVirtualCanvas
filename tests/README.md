@@ -11,8 +11,15 @@ Automated test suite for LGFXVirtualCanvas.
 
 ## Directory layout
 
+**Tier 1 — functional/correctness (LovyanGFX):**
+
 - `parity/` — Core invariant: the same `drawScene()` rendered through `LGFXVirtualScreen` at several split counts must be **pixel-identical**. `split=1` (one full-height tile, offsetY=0) is the full-render reference; `split=2/3/5/7` exercise tiling, offset, clipping, reassembly, and the partial last tile. Compared with Pillow; on mismatch it saves `full.png` / `virtual.png` / `diff.png`.
-- `lovyangfx_smoke/`, `m5gfx_smoke/`, `m5unified_smoke/` — Host graphics-environment smoke tests for the three LovyanGFX-family entry points (LovyanGFX / M5GFX / M5Unified). They render a small pattern and assert a PNG was produced; they do not exercise LGFXVirtualCanvas itself.
+
+**Tier 2 — cross-library build + minimal parity:**
+
+- `build_lovyangfx/`, `build_m5gfx/`, `build_m5unified/` — Verify `LGFXVirtualCanvas.h` compiles after each graphics-library entry point (LovyanGFX / M5GFX / M5Unified) and that the shared scene renders identically at `split=1` vs `split=3`. These double as the build/smoke check for each entry point. The shared scene lives in `common_libs/vc_scene/` and is used by all three.
+
+See [TEST_PLAN.ja.md](TEST_PLAN.ja.md) for the full strategy.
 
 ## Running
 

@@ -11,8 +11,15 @@ LGFXVirtualCanvas の自動テストスイート。
 
 ## ディレクトリ構成
 
+**Tier 1 — 機能・正当性(LovyanGFX):**
+
 - `parity/` — 中核の不変条件: 同じ `drawScene()` を `LGFXVirtualScreen` で複数の分割数で描いた結果が **ピクセル完全一致** すること。`split=1`(全高1タイル・offsetY=0)が全面描画の基準、`split=2/3/5/7` がタイル分割・オフセット・クリッピング・再構成・端数タイルを検証する。Pillow で比較し、不一致時は `full.png` / `virtual.png` / `diff.png` を保存
-- `lovyangfx_smoke/`, `m5gfx_smoke/`, `m5unified_smoke/` — LovyanGFX 系3つのエントリポイント(LovyanGFX / M5GFX / M5Unified)に対する host 描画環境の smoke。小さなパターンを描いて PNG 生成を確認するだけで、LGFXVirtualCanvas 自体は検証しない
+
+**Tier 2 — クロスライブラリ ビルド＋最小 parity:**
+
+- `build_lovyangfx/`, `build_m5gfx/`, `build_m5unified/` — `LGFXVirtualCanvas.h` が各エントリポイント(LovyanGFX / M5GFX / M5Unified)でコンパイルでき、共有シーンが `split=1` と `split=3` で一致することを検証。各エントリポイントのビルド/smoke チェックを兼ねる。共有シーンは `common_libs/vc_scene/` に置き3テストで使い回す
+
+詳細は [TEST_PLAN.ja.md](TEST_PLAN.ja.md) を参照。
 
 ## 実行
 
