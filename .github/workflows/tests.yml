@@ -1,0 +1,66 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install SDL2 (headless LovyanGFX / M5GFX backend)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsdl2-dev
+
+      - name: Setup arduino-cli
+        uses: arduino/setup-arduino-cli@v2
+        with:
+          version: 1.4.0
+
+      - name: Initialize arduino-cli
+        run: |
+          arduino-cli config init --overwrite
+          arduino-cli core update-index
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install test dependencies
+        working-directory: tests
+        run: uv sync
+
+      - name: Run pytest
+        working-directory: tests
+        run: uv run pytest -v --html=report.html --self-contained-html
+
+      - name: Upload graphics output artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: graphics-output
+          path: tests/**/output/**
+          if-no-files-found: ignore
+
+      - name: Upload pytest HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-report
+          path: tests/report.html
+          if-no-files-found: ignore
