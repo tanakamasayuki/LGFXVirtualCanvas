@@ -1,0 +1,10 @@
+profiles:
+  host:
+    fqbn: lang-ship:host:host:mode=lgfx
+    port: socket://localhost
+    platforms:
+      - platform: lang-ship:host
+    libraries:
+      - M5GFX (0.2.22)
+
+default_profile: host
