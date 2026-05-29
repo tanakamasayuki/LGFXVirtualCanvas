@@ -2,9 +2,6 @@
 
 > 日本語: [SPEC.ja.md](SPEC.ja.md)
 
-> **Status:** Design in progress (the public API "feel" is settled; updated as we go).
-> This document is driven by the **expected usage code (the public API contract)**; the implementation follows that contract.
-
 ## 0. Decision summary
 
 Key decisions settled so far:
@@ -308,8 +305,6 @@ So **each tile is cleared to the background color before draw is called (auto-cl
 - This makes **undrawn pixels always deterministic (the background color)**, so the result is identical regardless of split count even if draw does not paint every pixel.
 - Since there is no full-screen framebuffer, "preserving the previous frame (partial update)" is fundamentally impossible; redrawing everything every frame is the premise. auto-clear states that premise explicitly in the spec.
 - If the user always paints the whole screen with `fillScreen`, auto-clear is a double fill. Advanced users who want to avoid it can disable with `setAutoClear(false)` (when disabled, undrawn pixels are undefined).
-
-> The setter names (`setBackgroundColor` / `setAutoClear`) are provisional.
 
 ### 11.2 fillScreen
 

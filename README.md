@@ -1,0 +1,206 @@
+# LGFXVirtualCanvas
+
+> 日本語: [README.ja.md](README.ja.md)
+
+Draw to a **virtual full-screen canvas** on LovyanGFX / M5GFX — even when a
+full-screen double buffer does not fit in RAM.
+
+The screen is split into vertical tiles, each rendered into one small reused
+sprite. Your draw function runs once per tile in **full-screen (virtual)
+coordinates**; the library hides the Y offset, clipping, and flush. You never
+see the tiles.
+
+```cpp
+void drawScene(LGFXVirtualCanvas& g) {
+    g.fillScreen(TFT_BLACK);
+    g.fillCircle(g.width() / 2, g.height() / 2, 40, TFT_YELLOW);  // just draw full-screen
+}
+```
+
+> For the design rationale and the full specification, see [SPEC.md](SPEC.md).
+
+## Why
+
+A full-screen double buffer (e.g. 320×240×2 = 150 KB) often does not fit in
+RAM. The usual workaround — splitting the screen into bands and tracking the
+offset yourself — clutters every draw call with tile math. LGFXVirtualCanvas
+does the splitting for you: you write one draw function in full-screen
+coordinates and it renders correctly whether it runs as 1 tile or 7.
+
+## Requirements
+
+- An ESP32 (or any board) with **LovyanGFX**, **M5GFX**, or **M5Unified**.
+- Include your graphics library **before** `LGFXVirtualCanvas.h`.
+
+## Install
+
+**Arduino IDE** — Library Manager → search **LGFXVirtualCanvas** → Install. Also
+install your graphics library (LovyanGFX, M5GFX, or M5Unified) the same way.
+
+**PlatformIO** — in `platformio.ini`:
+
+```ini
+lib_deps =
+    https://github.com/tanakamasayuki/LGFXVirtualCanvas
+    lovyan03/LovyanGFX     ; or m5stack/M5GFX, m5stack/M5Unified
+```
+
+**Manual** — download a release `.zip` and unzip it into your Arduino
+`libraries/` folder.
+
+## Quick start
+
+```cpp
+#include <M5Unified.h>
+#include <LGFXVirtualCanvas.h>
+
+LGFXVirtualScreen screen(M5.Display);   // split count omitted = auto (3)
+
+void drawScene(LGFXVirtualCanvas& g) {
+    g.fillScreen(TFT_NAVY);
+    g.setTextColor(TFT_WHITE);
+    g.drawCentreString("Hello, tiled world!", g.width() / 2, g.height() / 2);
+}
+
+void setup() {
+    M5.begin();
+    screen.render(drawScene);   // first render allocates the tile buffer
+}
+
+void loop() {}
+```
+
+Plain LovyanGFX is the same — just construct your `LGFX` panel and pass it:
+
+```cpp
+#include <LovyanGFX.hpp>
+#include <LGFX_AUTODETECT.hpp>
+#include <LGFXVirtualCanvas.h>
+
+static LGFX lcd;
+LGFXVirtualScreen screen(lcd);
+// ... lcd.init(); screen.render(drawScene);
+```
+
+## With application state
+
+Pass your state by reference; the library forwards it to your draw function
+(no `void*`, no globals required):
+
+```cpp
+struct AppState { int score, playerX, playerY; };
+AppState state;
+
+void drawScene(LGFXVirtualCanvas& g, AppState& s) {
+    g.fillScreen(TFT_BLACK);
+    g.setCursor(10, 10);
+    g.printf("Score %d", s.score);
+    g.fillRect(s.playerX, s.playerY, 16, 16, TFT_GREEN);
+}
+
+void loop() {
+    updateState(state);
+    screen.render(drawScene, state);
+}
+```
+
+Keeping the View (`drawScene`) separate from the Model (`AppState`) and the
+update step is recommended — it makes the same draw function reusable for
+normal rendering, tiled rendering, and headless tests.
+
+## Controlling memory
+
+By default the screen uses **3 tiles**. You usually care about RAM, not tile
+count, so set a budget — the library picks the largest tile height that fits:
+
+```cpp
+void setup() {
+    M5.begin();
+    screen.setMemoryLimit(20 * 1024);   // use at most ~20 KB for the tile buffer
+    if (!screen.begin()) {              // optional: allocate now and check
+        Serial.println("alloc failed"); // NO fallback — failure is reported
+    }
+}
+```
+
+Allocation is **lazy**: nothing is allocated until `begin()` or the first
+`render()` (the screen size is unknown before `lcd.init()` / `M5.begin()`).
+If allocation cannot satisfy the request, it fails — there is no silent
+fallback — and `render()` returns `false` without drawing.
+
+## API
+
+### `LGFXVirtualScreen` — the manager
+
+| Member | Description |
+|---|---|
+| `LGFXVirtualScreen(LovyanGFX& panel, int splitCount = 0)` | Construct over a panel. `0` = auto (default 3 tiles). Nothing is allocated yet. |
+| `void setMemoryLimit(size_t bytes)` | Cap the tile buffer; tile height is derived from it (highest priority). |
+| `void setSplitCount(int count)` | Fixed number of tiles. |
+| `void setTileHeight(int height)` | Fixed tile height in pixels. |
+| `void setBackgroundColor(uint32_t color)` | auto-clear color (default black). |
+| `void setAutoClear(bool enable)` | Clear each tile before draw (default `true`). |
+| `bool begin()` | Allocate the tile buffer now. `false` on failure (no fallback). |
+| `bool isReady() const` | Whether the buffer is allocated. |
+| `int tileCount() const` / `int tileHeight() const` | Resolved geometry after allocation. |
+| `bool render(draw)` | Render `void draw(LGFXVirtualCanvas&)`. |
+| `bool render(draw, ctx)` | Render `void draw(LGFXVirtualCanvas&, T&)` with your `ctx`. |
+
+`render` returns `false` (and draws nothing) if the buffer is not allocated.
+The draw callback must be a **function pointer** (capturing lambdas /
+`std::function` are not accepted, to keep code size down).
+
+Priority when several are set: `setMemoryLimit` > `setSplitCount` >
+`setTileHeight` > default (3).
+
+### `LGFXVirtualCanvas` — the drawing surface
+
+Passed to your draw function. It looks like a normal LGFX/M5GFX canvas but
+maps your full-screen (virtual) coordinates onto the current tile. Supported:
+
+- Geometry: `width()`, `height()` (the full virtual screen)
+- Shapes: `fillScreen`, `drawPixel`, `drawLine`, `drawFastHLine`,
+  `drawFastVLine`, `fillRect`, `drawRect`, `drawCircle`, `fillCircle`
+- Image: `pushImage`
+- Text: `setCursor`, `getCursorX/Y`, `setTextColor`, `setTextSize`,
+  `setTextDatum`, `drawString`, `drawCentreString`, `drawRightString`,
+  `print`, `println`, `printf`
+
+Calling a method that is not (yet) wrapped is a compile error — by design, so
+unsupported drawing fails loudly rather than silently.
+
+## How it works
+
+LovyanGFX has no drawing-origin translation and its primitives are
+non-virtual, so the offset cannot be hidden behind a raw `LovyanGFX&`.
+LGFXVirtualCanvas is therefore a small concrete class whose every method does
+`y -= offsetY` and forwards to the tile sprite; out-of-tile drawing is clipped
+away by the sprite. Full-screen rendering is just the 1-tile case, so the same
+code path proves correctness. Rationale in [SPEC.md §6](SPEC.md).
+
+## Limitations
+
+- **Vertical tiling only.**
+- **Function pointers only** for the draw callback (no capturing lambdas).
+- **Neighbor-dependent drawing across tile boundaries** (anti-aliasing, blur,
+  neighbor-sampling filters) may not match a full render, because each tile is
+  redrawn and clipped independently. LovyanGFX's default primitives are not
+  anti-aliased, so this is usually a non-issue.
+- Text behavior that depends on the buffer height (auto-scroll, bottom-edge
+  wrap) is not guaranteed; basic cursor/print/drawString are.
+- No partial-update / retained mode: redraw the whole scene each frame.
+
+## Examples
+
+See [examples/](examples/): `HelloWorld`, `BouncingBall` (state + animation),
+`MemoryBudget` (budget + failure handling), `LovyanGFX_Basic`.
+
+## Testing
+
+Correctness is verified **headlessly** on the host: the same scene rendered at
+several split counts must be pixel-identical to the single-tile (full) render.
+See [tests/README.md](tests/README.md) and [SPEC.md §13](SPEC.md).
+
+## License
+
+[MIT](LICENSE) © TANAKA Masayuki
