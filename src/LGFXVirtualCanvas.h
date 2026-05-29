@@ -15,10 +15,15 @@
 ///   #include <LGFXVirtualCanvas.h>
 /// @endcode
 ///
-/// Two classes:
-///   - ::LGFXVirtualCanvas — the drawing surface handed to your draw function.
-///   - ::LGFXVirtualScreen — the manager you construct; holds the panel, the
-///                           split config, and runs render().
+/// Three classes:
+///   - ::LGFXVirtualCanvas — the drawing surface handed to your draw function
+///                           (local coordinates of the target surface).
+///   - ::LGFXVirtualScreen — manager for the whole panel.
+///   - ::LGFXVirtualSprite — manager for a placed sub-region (a tiled sprite);
+///                           same as a normal sprite but internally tiled.
+/// Both managers share the internal tiling engine and hand your draw function
+/// an ::LGFXVirtualCanvas; only the transfer target (full panel vs a placed
+/// rectangle) differs.
 
 #include <cstdarg>
 #include <cstdio>
@@ -27,25 +32,26 @@
 /// @brief The drawing surface handed to your draw function.
 ///
 /// A concrete class (no virtual, no abstract base) that wraps one tile sprite
-/// plus its Y offset. Every method translates virtual coordinates into
+/// plus its Y offset. Coordinates are **local to the target surface** (the full
+/// screen for LGFXVirtualScreen, or the sub-rectangle for LGFXVirtualSprite),
+/// with (0,0) at the surface's top-left. Every method translates that Y into
 /// tile-local coordinates (`y -= offsetY`) before forwarding to the sprite;
 /// drawing outside the tile is clipped away for free by the sprite's per-pixel
-/// clip. You normally never construct this yourself — LGFXVirtualScreen creates
-/// one per tile and passes it to your draw callback. All coordinates are in the
-/// virtual full-screen space.
+/// clip. You normally never construct this yourself — a manager creates one per
+/// tile and passes it to your draw callback.
 class LGFXVirtualCanvas
 {
 public:
-    /// @brief Construct over a tile sprite. (Internal: created per tile by LGFXVirtualScreen.)
+    /// @brief Construct over a tile sprite. (Internal: created per tile by a manager.)
     /// @param tile          The reusable tile sprite to draw into.
-    /// @param offsetY       Virtual Y of this tile's top edge (subtracted from every draw).
-    /// @param virtualHeight Full virtual screen height (returned by height()).
+    /// @param offsetY       Surface Y of this tile's top edge (subtracted from every draw).
+    /// @param virtualHeight Full surface height (returned by height()).
     LGFXVirtualCanvas(LGFX_Sprite &tile, int32_t offsetY, int32_t virtualHeight)
         : _tile(tile), _offsetY(offsetY), _virtualHeight(virtualHeight) {}
 
-    /// @brief Virtual canvas width in pixels (full screen, not the tile).
+    /// @brief Surface width in pixels (the full drawable surface, not the tile).
     int32_t width(void) const { return _tile.width(); }
-    /// @brief Virtual canvas height in pixels (full screen, not the tile).
+    /// @brief Surface height in pixels (the full drawable surface, not the tile).
     int32_t height(void) const { return _virtualHeight; }
 
     /// @brief Fill the whole virtual screen with @p color (offset-independent; see SPEC §11).
@@ -168,23 +174,18 @@ private:
     int32_t _virtualHeight;
 };
 
-/// @brief The manager: holds the panel and split config, and runs render().
+/// @brief Internal vertical-tiling engine shared by LGFXVirtualScreen and
+///        LGFXVirtualSprite. Not intended for direct use.
 ///
-/// Construct one over your panel. Memory is allocated lazily on begin() or the
-/// first render() (the screen size is unknown before `lcd.init()` /
-/// `M5.begin()`). Allocation failure is reported, never silently worked around.
-/// See SPEC §10.
-class LGFXVirtualScreen
+/// Holds the panel, the reusable tile sprite, the split configuration, and the
+/// per-tile render loop for a `regionW × regionH` drawable surface pushed to a
+/// panel position. Memory is allocated lazily; allocation failure is reported,
+/// never silently worked around. See SPEC §10.
+class LGFXVirtualTiledBase
 {
 public:
-    /// @brief Raw draw-callback type used internally (function pointer + ctx).
+    /// @brief Raw draw-callback type (function pointer + ctx).
     using DrawRaw = void (*)(LGFXVirtualCanvas &g, void *ctx);
-
-    /// @brief Construct over @p panel. Nothing is allocated yet.
-    /// @param panel      The real display (an LGFX, M5GFX, or M5.Display).
-    /// @param splitCount Number of tiles; 0 = auto (default 3). See SPEC §10.1.
-    explicit LGFXVirtualScreen(LovyanGFX &panel, int splitCount = 0)
-        : _panel(&panel), _tile(&panel), _splitCount(splitCount) {}
 
     /// @brief Cap the tile buffer to @p bytes; tile height is derived from it (highest priority). 0 = unset.
     void setMemoryLimit(size_t bytes) { _memLimit = bytes; _dirty = true; }
@@ -197,76 +198,75 @@ public:
     /// @brief Enable/disable clearing each tile before draw (default enabled). See SPEC §11.
     void setAutoClear(bool enable) { _autoClear = enable; }
 
-    /// @brief Allocate the reusable tile sprite now.
-    /// @return true on success; false on failure (no fallback — see SPEC §10.3).
-    bool begin(void)
-    {
-        if (!_panel)
-            return false;
-        const int32_t W = _panel->width();
-        const int32_t H = _panel->height();
-        if (W <= 0 || H <= 0)
-            return false; // panel not initialized yet
-
-        const int bits = ((int)_panel->getColorDepth()) & 0x00FF; // color_depth_t::bit_mask
-        const int32_t tileH = computeTileHeight(W, H, bits);
-        if (tileH < 1)
-        {
-            _ready = false;
-            return false; // requested geometry cannot be satisfied
-        }
-
-        _tile.deleteSprite();
-        _tile.setColorDepth(_panel->getColorDepth());
-        if (_tile.createSprite(W, tileH) == nullptr)
-        {
-            _ready = false;
-            return false; // out of RAM
-        }
-
-        _virtualHeight = H;
-        _tileHeight = tileH;
-        _tileCount = (H + tileH - 1) / tileH;
-        _ready = true;
-        _dirty = false;
-        return true;
-    }
-
     /// @brief Whether the tile buffer is allocated and current.
     bool isReady(void) const { return _ready && !_dirty; }
-
     /// @brief Number of tiles resolved at allocation.
     int tileCount(void) const { return _tileCount; }
     /// @brief Tile height in pixels resolved at allocation.
     int tileHeight(void) const { return _tileHeight; }
 
-    /// @brief Render via a raw `void(LGFXVirtualCanvas&, void*)` callback.
-    /// @return true if drawn; false if not allocated (then nothing is drawn).
-    bool render(DrawRaw draw, void *ctx = nullptr)
+protected:
+    LGFXVirtualTiledBase(LovyanGFX &panel) : _panel(&panel), _tile(&panel) {}
+
+    /// @brief Allocate the reusable tile sprite for a regionW × regionH surface.
+    /// @return false on failure (no fallback — see SPEC §10.3).
+    bool beginRegion(int32_t regionW, int32_t regionH)
     {
-        return renderEach([&](LGFXVirtualCanvas &g)
-                          { draw(g, ctx); });
+        if (!_panel || regionW <= 0 || regionH <= 0)
+            return false;
+        const int bits = ((int)_panel->getColorDepth()) & 0x00FF; // color_depth_t::bit_mask
+        const int32_t tileH = computeTileHeight(regionW, regionH, bits);
+        if (tileH < 1)
+        {
+            _ready = false;
+            return false; // requested geometry cannot be satisfied
+        }
+        _tile.deleteSprite();
+        _tile.setColorDepth(_panel->getColorDepth());
+        if (_tile.createSprite(regionW, tileH) == nullptr)
+        {
+            _ready = false;
+            return false; // out of RAM
+        }
+        _regionW = regionW;
+        _regionH = regionH;
+        _tileHeight = tileH;
+        _tileCount = (regionH + tileH - 1) / tileH;
+        _ready = true;
+        _dirty = false;
+        return true;
     }
 
-    /// @brief Render via a `void(LGFXVirtualCanvas&)` callback.
-    /// @return true if drawn; false if not allocated.
-    bool render(void (*draw)(LGFXVirtualCanvas &g))
+    /// @brief Render the regionW × regionH surface at panel position (posX, posY).
+    ///
+    /// The panel clip rect is set to the target rectangle so the last partial
+    /// tile and any screen-edge overhang are clipped automatically. The only
+    /// templated piece is the thin per-tile dispatch; clear/push stay
+    /// non-template (SPEC §5.4).
+    template <typename F>
+    bool renderRegion(int32_t regionW, int32_t regionH, int32_t posX, int32_t posY, F &&drawFn)
     {
-        return renderEach([&](LGFXVirtualCanvas &g)
-                          { draw(g); });
-    }
-
-    /// @brief Render via a typed `void(LGFXVirtualCanvas&, T&)` callback with your @p ctx.
-    /// @return true if drawn; false if not allocated.
-    template <typename T>
-    bool render(void (*draw)(LGFXVirtualCanvas &g, T &ctx), T &ctx)
-    {
-        return renderEach([&](LGFXVirtualCanvas &g)
-                          { draw(g, ctx); });
+        if (!_ready || _dirty || _regionW != regionW || _regionH != regionH)
+        {
+            if (!beginRegion(regionW, regionH))
+                return false; // not ready → draw nothing (SPEC §10.3)
+        }
+        _panel->setClipRect(posX, posY, _regionW, _regionH);
+        for (int i = 0; i < _tileCount; ++i)
+        {
+            const int32_t offsetY = (int32_t)i * _tileHeight;
+            if (_autoClear)
+                _tile.fillScreen(_bgColor);
+            LGFXVirtualCanvas g(_tile, offsetY, _regionH);
+            drawFn(g);
+            _tile.pushSprite(_panel, posX, posY + offsetY);
+        }
+        _panel->clearClipRect();
+        return true;
     }
 
 private:
-    // Decide tile height from config + panel size. SPEC §10.1 priority:
+    // Decide tile height from config + surface size. SPEC §10.1 priority:
     // memoryLimit > splitCount > tileHeight > default(3).
     int32_t computeTileHeight(int32_t W, int32_t H, int bits) const
     {
@@ -287,28 +287,7 @@ private:
         return (H + 2) / 3; // default 3 splits
     }
 
-    // The only templated piece is the thin per-tile callback dispatch; the
-    // heavy machinery (clear / push) stays non-template. SPEC §5.4.
-    template <typename F>
-    bool renderEach(F &&drawFn)
-    {
-        if (!_ready || _dirty)
-        {
-            if (!begin())
-                return false; // not ready → draw nothing (SPEC §10.3)
-        }
-        for (int i = 0; i < _tileCount; ++i)
-        {
-            const int32_t offsetY = (int32_t)i * _tileHeight;
-            if (_autoClear)
-                _tile.fillScreen(_bgColor);
-            LGFXVirtualCanvas g(_tile, offsetY, _virtualHeight);
-            drawFn(g);
-            _tile.pushSprite(_panel, 0, offsetY);
-        }
-        return true;
-    }
-
+protected:
     LovyanGFX *_panel;
     LGFX_Sprite _tile;
 
@@ -320,9 +299,118 @@ private:
     bool _autoClear = true;
 
     // computed state
-    int32_t _virtualHeight = 0;
+    int32_t _regionW = 0;
+    int32_t _regionH = 0;
     int32_t _tileHeight = 0;
     int _tileCount = 0;
     bool _ready = false;
     bool _dirty = true;
+};
+
+/// @brief Manager for the whole panel: draw a virtual full-screen canvas.
+///
+/// Construct one over your panel. Memory is allocated lazily on begin() or the
+/// first render() (the screen size is unknown before `lcd.init()` /
+/// `M5.begin()`). The draw callback receives an LGFXVirtualCanvas whose
+/// coordinates span the full screen.
+class LGFXVirtualScreen : public LGFXVirtualTiledBase
+{
+public:
+    /// @brief Construct over @p panel. Nothing is allocated yet.
+    /// @param panel      The real display (an LGFX, M5GFX, or M5.Display).
+    /// @param splitCount Number of tiles; 0 = auto (default 3). See SPEC §10.1.
+    explicit LGFXVirtualScreen(LovyanGFX &panel, int splitCount = 0)
+        : LGFXVirtualTiledBase(panel) { _splitCount = splitCount; }
+
+    /// @brief Allocate the tile buffer now. @return false on failure (no fallback).
+    bool begin(void) { return beginRegion(_panel->width(), _panel->height()); }
+
+    /// @brief Render via a raw `void(LGFXVirtualCanvas&, void*)` callback.
+    /// @return true if drawn; false if not allocated (then nothing is drawn).
+    bool render(DrawRaw draw, void *ctx = nullptr)
+    {
+        return renderRegion(_panel->width(), _panel->height(), 0, 0,
+                            [&](LGFXVirtualCanvas &g) { draw(g, ctx); });
+    }
+    /// @brief Render via a `void(LGFXVirtualCanvas&)` callback.
+    bool render(void (*draw)(LGFXVirtualCanvas &g))
+    {
+        return renderRegion(_panel->width(), _panel->height(), 0, 0,
+                            [&](LGFXVirtualCanvas &g) { draw(g); });
+    }
+    /// @brief Render via a typed `void(LGFXVirtualCanvas&, T&)` callback with your @p ctx.
+    template <typename T>
+    bool render(void (*draw)(LGFXVirtualCanvas &g, T &ctx), T &ctx)
+    {
+        return renderRegion(_panel->width(), _panel->height(), 0, 0,
+                            [&](LGFXVirtualCanvas &g) { draw(g, ctx); });
+    }
+};
+
+/// @brief Manager for a placed sub-region: a tiled sprite.
+///
+/// Behaves like a normal `LGFX_Sprite` of size `w × h`, except it is internally
+/// split into vertical tiles so it needs only a small buffer. The draw callback
+/// receives an LGFXVirtualCanvas in the sprite's **local coordinates**
+/// (0,0 = top-left of the sprite). The size is fixed at construction; the panel
+/// position can be changed any time (no reallocation). The library performs all
+/// transfer, including the partial last tile and screen-edge clipping.
+class LGFXVirtualSprite : public LGFXVirtualTiledBase
+{
+public:
+    /// @brief Construct a @p w × @p h tiled sprite, placed at panel (@p x, @p y).
+    /// @param panel The real display.
+    /// @param w,h   Sprite size (the drawable surface; fixed). Allocated at begin()/first render().
+    /// @param x,y   Default panel position (may be overridden per render()).
+    LGFXVirtualSprite(LovyanGFX &panel, int w, int h, int x = 0, int y = 0)
+        : LGFXVirtualTiledBase(panel), _w(w), _h(h), _x(x), _y(y) {}
+
+    /// @brief Set the panel position (no reallocation).
+    void setPosition(int x, int y) { _x = x; _y = y; }
+    /// @brief Current panel X.
+    int x(void) const { return _x; }
+    /// @brief Current panel Y.
+    int y(void) const { return _y; }
+    /// @brief Sprite width (local coordinate space).
+    int width(void) const { return _w; }
+    /// @brief Sprite height (local coordinate space).
+    int height(void) const { return _h; }
+
+    /// @brief Allocate the tile buffer now. @return false on failure (no fallback).
+    bool begin(void) { return beginRegion(_w, _h); }
+
+    /// @brief Render at the current position.
+    bool render(void (*draw)(LGFXVirtualCanvas &g))
+    {
+        return renderRegion(_w, _h, _x, _y, [&](LGFXVirtualCanvas &g) { draw(g); });
+    }
+    /// @brief Render at panel (@p x, @p y); also updates the current position.
+    bool render(void (*draw)(LGFXVirtualCanvas &g), int x, int y)
+    {
+        _x = x;
+        _y = y;
+        return renderRegion(_w, _h, _x, _y, [&](LGFXVirtualCanvas &g) { draw(g); });
+    }
+    /// @brief Render at the current position with typed @p ctx.
+    template <typename T>
+    bool render(void (*draw)(LGFXVirtualCanvas &g, T &ctx), T &ctx)
+    {
+        return renderRegion(_w, _h, _x, _y, [&](LGFXVirtualCanvas &g) { draw(g, ctx); });
+    }
+    /// @brief Render at panel (@p x, @p y) with typed @p ctx; also updates the current position.
+    template <typename T>
+    bool render(void (*draw)(LGFXVirtualCanvas &g, T &ctx), T &ctx, int x, int y)
+    {
+        _x = x;
+        _y = y;
+        return renderRegion(_w, _h, _x, _y, [&](LGFXVirtualCanvas &g) { draw(g, ctx); });
+    }
+    /// @brief Render via a raw `void(LGFXVirtualCanvas&, void*)` callback at the current position.
+    bool render(DrawRaw draw, void *ctx = nullptr)
+    {
+        return renderRegion(_w, _h, _x, _y, [&](LGFXVirtualCanvas &g) { draw(g, ctx); });
+    }
+
+private:
+    int _w, _h, _x, _y;
 };

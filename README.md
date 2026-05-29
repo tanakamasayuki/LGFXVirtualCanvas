@@ -128,6 +128,32 @@ Allocation is **lazy**: nothing is allocated until `begin()` or the first
 If allocation cannot satisfy the request, it fails — there is no silent
 fallback — and `render()` returns `false` without drawing.
 
+## Partial updates with `LGFXVirtualSprite`
+
+To update only a part of the screen (a status area, a moving icon, a fixed
+viewport), use `LGFXVirtualSprite` — a sub-region of any size that behaves like
+a normal sprite but is internally tiled, so it only needs a small buffer. You
+draw in the sprite's **local coordinates** (0,0 = its top-left); the library
+tiles, clips, and transfers it to the panel position.
+
+```cpp
+LGFXVirtualSprite view(lcd, 200, 150, 20, 60);  // 200x150 placed at (20,60)
+view.setMemoryLimit(12 * 1024);
+view.begin();
+
+void drawView(LGFXVirtualCanvas& g) {            // local coords: 0..200, 0..150
+    g.fillScreen(TFT_BLACK);
+    g.fillCircle(100, 75, 30, TFT_CYAN);
+}
+
+view.render(drawView);            // update just that region (rest of screen untouched)
+view.render(drawIcon, x, y);      // or draw at a new position (and remember it)
+```
+
+The library handles all transfer, including the partial last tile and any
+screen-edge overhang. `LGFXVirtualScreen` is just the special case "the whole
+panel" — both share the same tiling engine.
+
 ## API
 
 ### `LGFXVirtualScreen` — the manager
@@ -152,6 +178,21 @@ The draw callback must be a **function pointer** (capturing lambdas /
 
 Priority when several are set: `setMemoryLimit` > `setSplitCount` >
 `setTileHeight` > default (3).
+
+### `LGFXVirtualSprite` — a tiled sub-region
+
+Same configuration and `render(...)` overloads as `LGFXVirtualScreen`, plus:
+
+| Member | Description |
+|---|---|
+| `LGFXVirtualSprite(LovyanGFX& panel, int w, int h, int x = 0, int y = 0)` | A `w × h` tiled sprite at panel position `(x, y)`. Size is fixed; nothing allocated yet. |
+| `void setPosition(int x, int y)` | Move the sprite (no reallocation). |
+| `int x()` / `int y()` / `int width()` / `int height()` | Current position / size. |
+| `bool render(draw)` / `render(draw, x, y)` | Draw at the current / given position. `(x, y)` also updates the stored position. |
+| `bool render(draw, ctx)` / `render(draw, ctx, x, y)` | Typed-context variants. |
+
+Inside the draw callback, coordinates are **local to the sprite** (0,0 = its
+top-left), and `g.width()/g.height()` return the sprite size.
 
 ### `LGFXVirtualCanvas` — the drawing surface
 
@@ -193,7 +234,8 @@ code path proves correctness. Rationale in [SPEC.md §6](SPEC.md).
 ## Examples
 
 See [examples/](examples/): `HelloWorld`, `BouncingBall` (state + animation),
-`MemoryBudget` (budget + failure handling), `LovyanGFX_Basic`.
+`MemoryBudget` (budget + failure handling), `Viewport`
+(`LGFXVirtualSprite` partial update), `LovyanGFX_Basic`.
 
 ## Testing
 

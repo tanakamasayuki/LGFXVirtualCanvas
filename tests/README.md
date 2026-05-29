@@ -13,7 +13,11 @@ Automated test suite for LGFXVirtualCanvas.
 
 **Tier 1 — functional/correctness (LovyanGFX):**
 
-- `parity/` — Core invariant: the same `drawScene()` rendered through `LGFXVirtualScreen` at several split counts must be **pixel-identical**. `split=1` (one full-height tile, offsetY=0) is the full-render reference; `split=2/3/5/7` exercise tiling, offset, clipping, reassembly, and the partial last tile. Compared with Pillow; on mismatch it saves `full.png` / `virtual.png` / `diff.png`.
+- `parity/` — Core invariant: the same `drawScene()` rendered through `LGFXVirtualScreen` at several split counts must be **pixel-identical**. Multi-scene (shapes, circles, text, boundary, clipping, fuzz, animation). On mismatch it saves `*_full.png` / `*_virtual.png` / `*_diff.png`.
+- `autoclear/` — auto-clear determinism, `setBackgroundColor`, `setAutoClear(false)`.
+- `memory/` — `setMemoryLimit` tile-height math and allocation-failure semantics (no fallback; `begin()`/`render()` return `false`).
+- `pushimage/` — `pushImage` is split-invariant across tile boundaries.
+- `sprite/` — `LGFXVirtualSprite`: tiling correctness (incl. partial last tile), region containment, movable position.
 
 **Tier 2 — cross-library build + minimal parity:**
 

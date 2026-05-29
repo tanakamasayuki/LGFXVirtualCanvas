@@ -124,6 +124,31 @@ void setup() {
 `M5.begin()` 前は画面サイズが不明なため）。要求を満たせない場合は**フォールバック
 せず失敗**し、`render()` は何も描かず `false` を返します。
 
+## `LGFXVirtualSprite` で部分更新
+
+画面の一部だけ更新したいとき（ステータス領域・動くアイコン・固定ビューポート）は
+`LGFXVirtualSprite` を使います。任意サイズのサブ領域で、普通のスプライトのように
+使えますが内部はタイル分割なので小バッファで済みます。描画はそのスプライトの
+**ローカル座標**（0,0 = 左上）。ライブラリがタイル分割・クリップ・パネルへの転送を
+行います。
+
+```cpp
+LGFXVirtualSprite view(lcd, 200, 150, 20, 60);  // (20,60) に置く 200x150
+view.setMemoryLimit(12 * 1024);
+view.begin();
+
+void drawView(LGFXVirtualCanvas& g) {            // ローカル座標 0..200, 0..150
+    g.fillScreen(TFT_BLACK);
+    g.fillCircle(100, 75, 30, TFT_CYAN);
+}
+
+view.render(drawView);            // その領域だけ更新（画面の他は触らない）
+view.render(drawIcon, x, y);      // 位置を変えて描画（現在位置も更新）
+```
+
+転送・最終端数タイル・画面端のはみ出しは全部ライブラリ側。`LGFXVirtualScreen` は
+「画面全体」という特殊ケースで、両者は同じタイル分割エンジンを共有します。
+
 ## API
 
 ### `LGFXVirtualScreen` — マネージャ
@@ -148,6 +173,21 @@ void setup() {
 
 複数指定時の優先順位：`setMemoryLimit` ＞ `setSplitCount` ＞ `setTileHeight`
 ＞ 既定（3）。
+
+### `LGFXVirtualSprite` — タイル分割サブ領域
+
+`LGFXVirtualScreen` と同じ設定・`render(...)` に加えて：
+
+| メンバ | 説明 |
+|---|---|
+| `LGFXVirtualSprite(LovyanGFX& panel, int w, int h, int x = 0, int y = 0)` | パネル位置 `(x,y)` の `w × h` タイル分割スプライト。サイズ固定・未確保。 |
+| `void setPosition(int x, int y)` | 位置変更（再確保なし）。 |
+| `int x()` / `int y()` / `int width()` / `int height()` | 現在位置／サイズ。 |
+| `bool render(draw)` / `render(draw, x, y)` | 現在位置／指定位置に描画。`(x,y)` 指定時は現在位置も更新。 |
+| `bool render(draw, ctx)` / `render(draw, ctx, x, y)` | 型付き ctx 版。 |
+
+描画コールバック内の座標は**スプライトのローカル**（0,0 = 左上）、`g.width()/g.height()`
+はスプライトのサイズを返します。
 
 ### `LGFXVirtualCanvas` — 描画面
 
@@ -187,7 +227,8 @@ LovyanGFX には描画原点の平行移動が無く、プリミティブが非 
 ## サンプル
 
 [examples/](examples/) を参照：`HelloWorld`, `BouncingBall`（状態＋アニメ）,
-`MemoryBudget`（予算＋失敗処理）, `LovyanGFX_Basic`。
+`MemoryBudget`（予算＋失敗処理）, `Viewport`（`LGFXVirtualSprite` 部分更新）,
+`LovyanGFX_Basic`。
 
 ## テスト
 

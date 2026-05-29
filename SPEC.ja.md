@@ -16,12 +16,13 @@
 - **分割の指定は「メモリ上限」が主役**。`setMemoryLimit(bytes)`（バイト単位・既定 0＝指定なし）を最優先、次に分割数、未指定ならデフォルト3分割。
 - **クリッピングは sprite 標準の per-pixel clip で自動的に安全**（範囲外描画は消えるだけ）。
 - **各タイルは draw 前に背景色でクリアする（auto-clear、既定 ON）**。背景色は設定可（既定: 黒）。未描画画素は背景色で決定的になり、分割数に依らず結果が一致する。`setAutoClear(false)` で無効化できる。
+- **マネージャは2種**：`LGFXVirtualScreen`（全画面）と `LGFXVirtualSprite`（任意位置・サイズのサブ領域＝内部分割スプライト。ローカル座標）。両者は内部のタイル分割エンジンを共有し、draw に同じ `LGFXVirtualCanvas` を渡す。違いは転送先（全画面か、置いた矩形か）だけ。詳細は §7.1。
 
 これらの根拠（特になぜ専用具象クラスにするか）は §6 を参照。
 
 ## 1. ライブラリ名
 
-`LGFXVirtualCanvas`（インクルードは `#include <LGFXVirtualCanvas.h>`。ヘッダ1枚で `LGFXVirtualScreen` / `LGFXVirtualCanvas` の両クラスを宣言する）
+`LGFXVirtualCanvas`（インクルードは `#include <LGFXVirtualCanvas.h>`。ヘッダ1枚で `LGFXVirtualScreen` / `LGFXVirtualSprite` / `LGFXVirtualCanvas` を宣言する）
 
 ## 2. 目的
 
@@ -174,6 +175,27 @@ bool render(void (*draw)(LGFXVirtualCanvas& g, T& ctx), T& ctx); // 型付き ct
 - 分割設定（メモリ上限／分割数／タイル高）を保持する。
 - `begin()`／初回 `render()` でタイル sprite を確保する。
 - `render()` でタイルごとに `LGFXVirtualCanvas` を生成し、draw を再実行し、実パネルへ push する。
+
+### 7.1 LGFXVirtualSprite（部分描画／サブ領域）
+
+`LGFXVirtualSprite` は「**任意位置・任意サイズのサブ領域**」を描く版。通常の `LGFX_Sprite` と同じ感覚だが、内部が縦タイル分割なので小バッファで済む。動的に書き換わる一部分だけを更新する用途（例：320×240 画面の中の固定ビューポート、動くアイコン）に使う。
+
+- **座標系はそのスプライトのローカル**（0,0 = スプライト左上）。全画面仮想座標ではない。`width()/height()` はスプライトのサイズを返す。
+- **サイズは構成（begin 前）で確定**。`LGFXVirtualSprite spr(panel, w, h, x = 0, y = 0)`。バッファは幅 `w`・高さ `tileH`（メモリ予算/分割設定から算出）で確保。
+- **配置位置は可変**。`render(draw)` は現在位置、`render(draw, x, y)` はそこへ描画しつつ現在位置を更新（`setPosition` でも変更可）。位置変更で再確保はしない。
+- **転送は全部ライブラリ側**。push の前にパネルの clip 矩形を `(x, y, w, h)` に設定するので、**最終端数タイルの余剰行も画面端のはみ出しも自動でクリップ**され、ユーザは何も減算しなくてよい（LovyanGFX の push は転送先パネルの clip を尊重することを確認済み）。
+- `LGFXVirtualScreen` は実質「サイズ=画面・位置=(0,0)」の `LGFXVirtualSprite` に相当し、両者は内部エンジン（`LGFXVirtualTiledBase`）を共有する。
+- メモリ予算・auto-clear・確保失敗のフォールバック無し等の方針は全画面版と共通（§10/§11）。
+
+```cpp
+// (40,0) に置く 240x240 のタイル分割スプライト（ローカル座標）
+LGFXVirtualSprite view(lcd, 240, 240, 40, 0);
+view.setMemoryLimit(16 * 1024);
+view.begin();
+view.render(drawView);            // 現在位置に描画
+// 動かす場合：
+view.render(drawIcon, x, y);      // (x,y) へ描画＋現在位置更新
+```
 
 ## 8. API ラップ方針
 

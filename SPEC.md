@@ -16,12 +16,13 @@ Key decisions settled so far:
 - **Splitting is specified primarily by a memory budget.** `setMemoryLimit(bytes)` (in bytes; default 0 = unset) takes priority, then split count, then a default of 3 splits.
 - **Clipping is automatically safe via the sprite's standard per-pixel clip** (out-of-range drawing simply disappears).
 - **Each tile is cleared to a background color before draw (auto-clear, default ON).** The background color is configurable (default: black). Undrawn pixels become deterministic (the background color) so the result is identical regardless of split count. Disable with `setAutoClear(false)`.
+- **Two managers**: `LGFXVirtualScreen` (whole panel) and `LGFXVirtualSprite` (a placed sub-region of any size = an internally-tiled sprite, local coordinates). Both share the internal tiling engine and hand your draw function the same `LGFXVirtualCanvas`; only the transfer target (full panel vs a placed rectangle) differs. See §7.1.
 
 The rationale (especially why a dedicated concrete class) is in §6.
 
 ## 1. Library name
 
-`LGFXVirtualCanvas` (included via `#include <LGFXVirtualCanvas.h>`; a single header declares both `LGFXVirtualScreen` and `LGFXVirtualCanvas`).
+`LGFXVirtualCanvas` (included via `#include <LGFXVirtualCanvas.h>`; a single header declares `LGFXVirtualScreen`, `LGFXVirtualSprite`, and `LGFXVirtualCanvas`).
 
 ## 2. Purpose
 
@@ -174,6 +175,27 @@ Responsibilities of `LGFXVirtualScreen` (the manager):
 - Hold the split config (memory budget / split count / tile height).
 - Allocate the tile sprite at `begin()` / first `render()`.
 - In `render()`, create an `LGFXVirtualCanvas` per tile, re-run draw, and push to the real panel.
+
+### 7.1 LGFXVirtualSprite (partial update / sub-region)
+
+`LGFXVirtualSprite` draws a **sub-region of any position and size**. It feels like a normal `LGFX_Sprite`, but it is internally split into vertical tiles so it only needs a small buffer. Use it to update only the part that changes dynamically (e.g. a fixed viewport inside a 320×240 screen, or a moving icon).
+
+- **Coordinates are local to the sprite** (0,0 = top-left of the sprite), not full-screen virtual. `width()/height()` return the sprite size.
+- **The size is fixed at construction** (before `begin()`): `LGFXVirtualSprite spr(panel, w, h, x = 0, y = 0)`. The buffer is allocated as width `w` × `tileH` (from the memory budget / split config).
+- **The panel position is movable**: `render(draw)` uses the current position; `render(draw, x, y)` draws there and updates the current position (`setPosition` also works). Moving does not reallocate.
+- **The library performs all transfer**: before each push the panel clip rect is set to `(x, y, w, h)`, so the **partial last tile and any screen-edge overhang are clipped automatically** — the user reduces nothing (LovyanGFX's push honors the destination panel's clip rect, verified).
+- `LGFXVirtualScreen` is effectively an `LGFXVirtualSprite` of "size = panel, position = (0,0)"; both share the internal engine (`LGFXVirtualTiledBase`).
+- The memory budget, auto-clear, and no-fallback-on-failure policies are the same as the full-screen version (§10/§11).
+
+```cpp
+// A 240x240 tiled sprite placed at (40,0); local coordinates.
+LGFXVirtualSprite view(lcd, 240, 240, 40, 0);
+view.setMemoryLimit(16 * 1024);
+view.begin();
+view.render(drawView);            // at the current position
+// To move it:
+view.render(drawIcon, x, y);      // draw at (x,y) and update the current position
+```
 
 ## 8. API wrapping policy
 
