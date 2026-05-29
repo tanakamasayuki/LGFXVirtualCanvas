@@ -68,6 +68,14 @@ public:
     template <typename T>
     void fillCircle(int32_t x, int32_t y, int32_t r, const T &color) { _tile.fillCircle(x, y - _offsetY, r, color); }
 
+    // --- image ---
+    // Forward with y offset; the sprite's per-pixel clip discards rows outside
+    // the tile (incl. negative dest y, where LGFX offsets into the source).
+    template <typename T>
+    void pushImage(int32_t x, int32_t y, int32_t w, int32_t h, const T *data) { _tile.pushImage(x, y - _offsetY, w, h, data); }
+    template <typename T>
+    void pushImage(int32_t x, int32_t y, int32_t w, int32_t h, const T *data, const T &transparent) { _tile.pushImage(x, y - _offsetY, w, h, data, transparent); }
+
     // --- text ---
     // Cursor Y is a virtual coordinate; print/println/printf advance the
     // (tile-local) cursor and reproduce deterministically across tiles.

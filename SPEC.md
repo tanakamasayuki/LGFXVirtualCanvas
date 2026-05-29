@@ -234,7 +234,7 @@ Cases to consider:
 - Off-screen
 - The partial height of the last tile
 
-Policy: **experiment first, then decide.** If the internal sprite's per-pixel clip alone makes the above cases match full-screen rendering, provide it with `y -= offsetY` forwarding only. If clip alone breaks (the draw position or source crop shifts) and dedicated clipping is judged too heavy, it may remain an **unsupported method** for now (§8; calling it is a compile error).
+**Experiment result (supported)**: `tests/pushimage` confirms split=1 equals split=2/3/5/7. All the cases above (top/bottom overhang, boundary straddle, off-screen) matched full-screen rendering with the internal sprite's per-pixel clip alone, so it is **supported with `y -= offsetY` forwarding only**. LGFX's `pushImage` offsets into the source for negative destination Y and clips correctly, so no dedicated clipping was needed. The transparent-color variant, palette depths, and rotate/zoom variants are still to be verified.
 
 ## 10. Splitting and memory allocation
 
@@ -378,7 +378,7 @@ Each case verifies pixel equality across several splits (e.g. 1/2/3/5/7).
 | T1-9 | memory / alloc failure | `setMemoryLimit` derives tileH; too-small → `begin()`=false, `isReady()`=false, `render()`=false (no fallback) (§10.3) |
 | T1-10 | random fuzz | generate shape sequences from a seed; equal across splits (log the seed for reproducibility) |
 | T1-11 | animation | run a sequence of frames; each frame split-invariant |
-| T1-12 | pushImage (experiment) | experiment whether clip alone matches; if hard, decide to make it an unsupported method (§9.2) |
+| T1-12 | pushImage | split-invariant with clip only (overhangs, boundary straddle, off-screen). Verified by experiment; supported (§9.2) |
 
 ### 13.5 Shared rules
 

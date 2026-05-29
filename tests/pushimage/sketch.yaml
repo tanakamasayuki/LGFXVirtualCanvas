@@ -1,0 +1,11 @@
+profiles:
+  host:
+    fqbn: lang-ship:host:host:mode=lgfx
+    port: socket://localhost
+    platforms:
+      - platform: lang-ship:host
+    libraries:
+      - LovyanGFX (1.2.21)
+      - dir: ../../
+
+default_profile: host
