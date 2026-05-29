@@ -7,4 +7,4 @@ profiles:
     libraries:
       - M5Unified (0.2.16)
       - M5GFX (0.2.22)
-      - dir : ../../
+      - LGFXVirtualCanvas (0.2.0)
