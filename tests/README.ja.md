@@ -19,7 +19,7 @@ LGFXVirtualCanvas の自動テストスイート。
 
 - `build_lovyangfx/`, `build_m5gfx/`, `build_m5unified/` — `LGFXVirtualCanvas.h` が各エントリポイント(LovyanGFX / M5GFX / M5Unified)でコンパイルでき、共有シーンが `split=1` と `split=3` で一致することを検証。各エントリポイントのビルド/smoke チェックを兼ねる。共有シーンは `common_libs/vc_scene/` に置き3テストで使い回す
 
-詳細は [TEST_PLAN.ja.md](TEST_PLAN.ja.md) を参照。
+テスト方針・計画（Tier 構成・ケース一覧・配分）は [SPEC.ja.md](../SPEC.ja.md) §13 を参照。
 
 ## 実行
 

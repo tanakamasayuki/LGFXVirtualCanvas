@@ -1,5 +1,7 @@
 # LGFXVirtualCanvas 要件定義
 
+> English: [SPEC.md](SPEC.md)
+
 > **ステータス:** 設計検討中（主要 API の利用感を確定し、随時更新）
 > 本ドキュメントは「想定する利用コード（公開 API の契約）」を起点に詰めている。実装はこの契約に従う。
 
@@ -330,43 +332,59 @@ void setup() {
 
 draw 関数はタイルごとに再実行され、各回が sprite の clip で切り取られて組み上がる。このため、**ある画素の出力が「タイル境界をまたいだ近傍画素」に依存する描画**（アンチエイリアス、ぼかし、近傍参照フィルタ等）は、分割描画と全面描画で一致しない場合がある。LovyanGFX の既定プリミティブはアンチエイリアス無しなので通常は問題にならないが、AA 付き描画を使う場合はこの制約に留意する。
 
-## 13. テスト方針
+## 13. テスト方針・計画
 
-GitHub Actions 上のヘッドレス描画環境でテストする。ホストは `lang-ship:host` の `mode=lgfx` プロファイル＋ LovyanGFX を用い、`pytest-embedded-arduino-cli` の `dut` フィクスチャでシリアル出力を待ち受け、sketch が出力した PNG を検証する。PNG は `gfx.createPng()` で生成する。
+GitHub Actions 上のヘッドレス描画環境でテストする。ホストは `lang-ship:host` の `mode=lgfx` プロファイルを用い、`pytest-embedded-arduino-cli` の `dut` フィクスチャでシリアル出力を待ち受け、sketch が `gfx.createPng()` で出力した PNG を Pillow で pixel 比較する。
 
-### 13.1 比較対象（同一 draw 関数を分割数だけ変えて比較）
+> テストの**実行方法・ディレクトリ構成・現状**は [tests/README](tests/README.md)（EN+JA）を参照。本節は設計としての**テスト方針と計画**を定める。
+
+### 13.1 2層構成と配分
+
+LGFXVirtualCanvas のヘッダは gfx 中立で、対応エントリポイントは **LovyanGFX / M5GFX / M5Unified** の3つ。ただし **M5GFX / M5Unified の描画エンジンは内部的に LovyanGFX** であり、タイル分割ロジックの正当性は3つで本質的に同じ。よってテストを2層に分ける。
+
+- **Tier 1（機能・正当性）**: ライブラリのロジックを **LovyanGFX 1本で網羅的に**検証する（§13.4）。
+- **Tier 2（クロスライブラリ ビルド＋最小描画）**: 「ヘッダが各エントリポイントで**コンパイルでき、最小描画が parity を満たす**」ことを **3ライブラリ**で担保する。`split=1` と `split=3` の一致＋ PNG 生成を確認するだけの最小内容で、smoke（ビルド確認）の役割も兼ねる。共有最小シーンは `tests/common_libs/` に置き3テストで使い回す。
+- **（任意）Tier 3**: `esp32:esp32:esp32` の compile-only を1本置き、host で出ないターゲット依存のビルド破綻を早期検出する。実描画の検証は host に委ねる。
+
+**配分の根拠**：3ライブラリで全ケースを回しても描画エンジンが同一なため**新しいロジック網羅は得られず**、CI 時間とライブラリ取得だけが増える。クロスで守りたいのは「各 include 順序・各ライブラリの型で**コンパイル＆描画できる**」ことであり、それは Tier 2 で十分。
+
+### 13.2 比較方法（同一 draw 関数を分割数だけ変えて比較）
 
 draw 関数は `LGFXVirtualCanvas&` を受けるため、「通常 Canvas への全面描画」も `LGFXVirtualScreen` の **1分割（split=1, offsetY=0）** で表現する。1分割時は forwarding が素通り（offsetY=0）なので、これが全面描画の基準になる。
 
-- 基準：`split = 1` で描画した PNG（`full.png`）
-- 検証：`split = 2, 3, 5, …` で描画した PNG（`virtual.png`）
+- 基準：`split = 1` で描画した PNG
+- 検証：`split = 2, 3, 5, …` で描画した PNG
 
-PNG のバイナリ一致ではなく、読み込んだ pixel 配列の一致で比較する（Pillow 等）。「分割しても結果が変わらない」という不変条件を直接検証する。
+PNG のバイナリ一致ではなく、読み込んだ pixel 配列の一致で比較する。「**分割しても結果が変わらない**」という不変条件を直接検証する。
 
-### 13.2 失敗時 artifacts
+### 13.3 失敗時 artifacts
 
-失敗時には以下を保存する。
+失敗時には `full.png`（基準）/ `virtual.png`（分割）/ `diff.png`（差分）を保存する。
 
-- `full.png`
-- `virtual.png`
-- `diff.png`
+### 13.4 Tier 1 ケース一覧（LovyanGFX）
 
-### 13.3 テストケース
+各ケースは複数の split（例 1/2/3/5/7）で pixel 一致を確認する。
 
-最低限以下を用意する。
+| # | ケース | 検証内容 |
+|---|---|---|
+| T1-1 | parity（総合） | 図形＋テキスト混在シーンが split 不変 |
+| T1-2 | 基本図形 | fillRect / drawRect / drawLine / drawPixel / drawFastH/VLine |
+| T1-3 | 円 | drawCircle / fillCircle |
+| T1-4 | テキスト | drawString / setCursor＋print/println/printf、cursor Y 仮想座標（§9.1） |
+| T1-5 | タイル境界 | `y = tileH-1 / tileH / tileH+1` を跨ぐ描画（§12） |
+| T1-6 | 端数タイル | 画面高が分割数で割り切れない（例 split=7 で最終30行）（§12） |
+| T1-7 | クリッピング安全性 | 画面外・負座標・下端超過でクラッシュせず一致（§12） |
+| T1-8 | auto-clear | 未描画画素が背景色で決定的／`setBackgroundColor`／`setAutoClear(false)`（§11） |
+| T1-9 | メモリ／確保失敗 | `setMemoryLimit` で tileH 算出、過小指定で `begin()`＝false・`isReady()`＝false・`render()`＝false（フォールバックしない）（§10.3） |
+| T1-10 | ランダム fuzz | 乱数シードで図形列を生成、各 split で一致（シードをログ出力し再現可能に） |
+| T1-11 | アニメーション | フレーム列を回し、各フレームが split 不変 |
+| T1-12 | pushImage（実験） | クリップのみで一致するか実験。困難なら非対応メソッド化を判断（§9.2） |
 
-- fillRect / drawRect
-- drawLine
-- drawPixel
-- drawCircle / fillCircle
-- drawString
-- setCursor + print / println / printf
-- pushImage
-- タイル境界
-- 最終端数タイル（画面高が分割数で割り切れないケース）
-- ランダム図形 fuzz
-- アニメーションフレーム比較
-- 複数の分割数（1/2/3/5/7 等）で全て一致すること
+### 13.5 共有ルール
+
+- 1テスト = 1ディレクトリ（`<name>.ino` / `sketch.yaml` / `test_<name>.py`）。
+- 成果物は `output/<name>.png`、`conftest.py` が各テスト前に wipe。
+- fuzz はシード固定＋ログ出力で再現可能にする。
 
 ## 14. 描画関数分離の推奨
 

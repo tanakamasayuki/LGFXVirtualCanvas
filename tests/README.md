@@ -19,7 +19,7 @@ Automated test suite for LGFXVirtualCanvas.
 
 - `build_lovyangfx/`, `build_m5gfx/`, `build_m5unified/` — Verify `LGFXVirtualCanvas.h` compiles after each graphics-library entry point (LovyanGFX / M5GFX / M5Unified) and that the shared scene renders identically at `split=1` vs `split=3`. These double as the build/smoke check for each entry point. The shared scene lives in `common_libs/vc_scene/` and is used by all three.
 
-See [TEST_PLAN.ja.md](TEST_PLAN.ja.md) for the full strategy.
+See [SPEC.md](../SPEC.md) §13 for the test policy and plan (tiers, case list, distribution).
 
 ## Running
 
