@@ -23,7 +23,7 @@ template instantiates for `LovyanGFX&`, `M5Canvas&`, and `LGFXVirtualCanvas&`.
 | **B** full sprite         | one 320×240 sprite, `pushSprite` once | internal **and** PSRAM | baseline ceiling (most RAM); draw/xfer split measured |
 | **C** `LGFXVirtualScreen` | the library, single buffer (default) | internal | split sweep + autoClear on/off; draw/transfer serialized |
 | **D** `LGFXVirtualScreen` | the library, `setDoubleBuffer(true)` | internal | split sweep; draw/transfer overlap (2× tile RAM) |
-| **C** `LGFXVirtualSprite` | the library, 160×100 sub-region | internal | one representative split |
+| **C/D** `LGFXVirtualSprite` | the library, sub-region size × split sweep | internal | finds the best split per size (Phase 3) |
 
 C is the default single-buffer mode (correct, serialized — `waitDMA` after each
 tile push). D is the opt-in two-buffer ping-pong that overlaps a tile's DMA
@@ -31,7 +31,10 @@ transfer with the next tile's draw. See SPEC §10.5 for the mechanism.
 
 ### Axes
 
-- **split count**: 1, 2, 3, 4, 6, 8 (method C)
+- **split count**: 1, 2, 3, 4, 6, 8 (methods C, D)
+- **region size** (Phase 3 sprite sweep): 64×48, 128×96, 160×100, 240×160,
+  320×240 — each swept over all split counts, single buffer then double, to
+  expose how the optimal split shifts with size (and to inform the no-arg default)
 - **auto-clear**: on (default) vs off — quantifies the double-fill cost when the
   scene already paints every pixel with `fillScreen` (SPEC §11.1)
 - **buffer placement**: internal RAM vs PSRAM — **baselines only.** The library
@@ -71,6 +74,21 @@ tables; `loop()` is idle.
 - Within C, watch how **split count** trades memory for frame time, and how
   **autoClear=off** helps when the scene fills the screen anyway.
 - Compare **D vs C** at the same split: the gain is the draw/transfer overlap.
-- `heavy` is CPU-bound (split count matters most); `light` is transfer-bound
-  (split count matters least). The transfer-bound regime is exactly where D's
-  overlap should pay off most.
+  It grows with split count and is **largest in the CPU-bound `heavy` scene**
+  (≈+40% at split 8), where a big per-tile draw can hide the ~32 ms transfer
+  behind it. In the transfer-bound `light` scene the draw is tiny, so there is
+  almost nothing to overlap (≈+5%).
+- `heavy` is CPU-bound: split count matters most, and **C gets *slower* as
+  splits rise** because the scene callback redraws the full region for every
+  tile (off-tile pixels are clipped, but the CPU still walks every primitive).
+  D absorbs this by overlapping the redundant draw with transfer.
+- `light` / `image` are transfer-bound and sit near the **~31 fps full-frame
+  SPI ceiling** (320×240×2 = 153,600 B ≈ 32 ms at 40 MHz) almost regardless of
+  split — the library reaches that ceiling; direct panel (A) stays below it for
+  lack of batching/DMA overlap.
+- **The optimal split count depends on the region size.** Large/full-screen
+  regions want *more* splits (less RAM per tile; for D, a fuller pipeline).
+  Small regions do not: per-tile overhead (DMA setup, `waitDMA`, callback
+  re-invocation) and redundant redraw dominate, so **split=1 is best for very
+  small sprites**. The 160×100 sprite here is measured at split=3 only as one
+  representative point — not as its optimum.

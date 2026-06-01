@@ -9,6 +9,8 @@
 //   method C  LGFXVirtualScreen    — the library, internal RAM, split sweep,
 //                                     autoClear on/off, plus a Sprite variant.
 // PHASE 2 (added later): method D — two-buffer ping-pong (DMA overlap).
+// PHASE 3 (added later): sprite size x split sweep (C and D) — measures how the
+//   optimal split count shifts with region size, to inform the no-arg default.
 //
 // The same scene is drawn through every strategy via a TEMPLATED scene function
 // so the work is byte-for-byte identical across A / B / C — LGFXVirtualCanvas
@@ -27,6 +29,22 @@ static const int WARMUP = 5;  // frames discarded before timing
 static const int FRAMES = 60; // timed frames per run (averaged)
 static const int SPLITS[] = {1, 2, 3, 4, 6, 8};
 static const int N_SPLITS = sizeof(SPLITS) / sizeof(SPLITS[0]);
+
+// Region sizes swept to find the best split per size (Phase 3). Spans tiny
+// widgets to the full panel, so the optimum split clearly shifts with size.
+struct SizeWH
+{
+    int w, h;
+    const char *name;
+};
+static const SizeWH SIZES[] = {
+    {64, 48, "64x48"},
+    {128, 96, "128x96"},
+    {160, 100, "160x100"},
+    {240, 160, "240x160"},
+    {320, 240, "320x240"},
+};
+static const int N_SIZES = sizeof(SIZES) / sizeof(SIZES[0]);
 
 static int PANEL_W = 0, PANEL_H = 0;
 
@@ -121,7 +139,7 @@ static void row(const char *method, int split, int tileH,
                 long draw_us, long xfer_us, long frame_us)
 {
     const float fps = frame_us > 0 ? 1000000.0f / (float)frame_us : 0.0f;
-    char ds[12], xs[12], sp[8], th[8];
+    char ds[12], xs[12], sp[12], th[12];
     if (draw_us < 0)
         snprintf(ds, sizeof(ds), "%8s", "-");
     else
@@ -234,16 +252,19 @@ static void runLibraryScreen(int scene, int split, bool autoClear, bool doubleBu
     row(name, split, screen.tileHeight(), -1, -1, frame);
 }
 
-// ---- method C: the library, LGFXVirtualSprite (placed sub-region) ------------
-static void runLibrarySprite(int scene, int split)
+// ---- method C/D: LGFXVirtualSprite, one (size, split, buffer) data point -----
+// doubleBuf=false → C (single buffer); true → D (ping-pong overlap).
+static void runSpritePoint(int scene, int w, int h, const char *szName,
+                           int split, bool doubleBuf)
 {
-    const int SW = 160, SH = 100;
-    LGFXVirtualSprite spr(M5.Display, SW, SH, (PANEL_W - SW) / 2, (PANEL_H - SH) / 2);
+    LGFXVirtualSprite spr(M5.Display, w, h, (PANEL_W - w) / 2, (PANEL_H - h) / 2);
     spr.setSplitCount(split);
+    spr.setDoubleBuffer(doubleBuf);
     g_scene = scene;
     if (!spr.begin())
     {
-        Serial.printf("  -- library sprite begin() failed (split=%d, skipped)\n", split);
+        Serial.printf("  -- sprite %s begin() failed (split=%d db=%d, skipped)\n",
+                      szName, split, doubleBuf);
         return;
     }
     for (int i = 0; i < WARMUP; ++i)
@@ -258,7 +279,30 @@ static void runLibrarySprite(int scene, int split)
         spr.render(sceneVC);
     }
     const long frame = (long)((micros() - t0) / FRAMES);
-    row("C sprite 160x100", split, spr.tileHeight(), -1, -1, frame);
+    char name[28];
+    snprintf(name, sizeof(name), "%s spr %s", doubleBuf ? "D" : "C", szName);
+    row(name, split, spr.tileHeight(), -1, -1, frame);
+}
+
+// ---- sprite size x split sweep: where is the best split per region size? ------
+// For each size we sweep all splits, single buffer then double buffer. Small
+// sizes are expected to peak at split=1 (per-tile overhead and redundant redraw
+// dominate); large sizes shift toward more splits. This is what informs the
+// no-arg default. A blank line separates each size block for readability.
+static void runSpriteSweep(int scene, const char *name)
+{
+    header(name, "sprite-sweep");
+    for (int z = 0; z < N_SIZES; ++z)
+    {
+        const SizeWH &s = SIZES[z];
+        if (s.w > PANEL_W || s.h > PANEL_H)
+            continue;
+        for (int i = 0; i < N_SPLITS; ++i)
+            runSpritePoint(scene, s.w, s.h, s.name, SPLITS[i], false);
+        for (int i = 0; i < N_SPLITS; ++i)
+            runSpritePoint(scene, s.w, s.h, s.name, SPLITS[i], true);
+        Serial.println();
+    }
 }
 
 // ---- one full block for a given scene ----------------------------------------
@@ -276,12 +320,14 @@ static void runBlock(int scene, const char *name)
     // D: double buffer (draw/transfer overlap) — same split sweep, autoClear on
     for (int s = 0; s < N_SPLITS; ++s)
         runLibraryScreen(scene, SPLITS[s], true, true);
-    runLibrarySprite(scene, 3);
 
     // --- PSRAM block: baseline only (library has no PSRAM API in Phase 1) ---
     header(name, "PSRAM");
     runFullSprite(scene, true);
     Serial.println("  (library C measured on internal RAM only — see README)");
+
+    // --- sprite size x split sweep: informs the no-arg default split ---
+    runSpriteSweep(scene, name);
 }
 
 void setup()
