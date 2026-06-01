@@ -332,6 +332,61 @@ Two modes resolve this; the active one is chosen by the **double-buffer mode** (
 
 Both modes produce **pixel-identical** output (verified by the parity test's double-buffer cases). On the bus-less host backend `waitDMA()` is a no-op and both modes render the same.
 
+### 10.6 Why ≈ 19 KB per tile, and the draw-bound vs transfer-bound trade-off
+
+The default budget (§10.1) is a single number that has to pick a good split count *and* the auto double-buffer decision (§10.5) across every surface size, without knowing what the draw callback does. Here is the reasoning, because the result is subtle — and inverts a common intuition.
+
+**The two costs per frame.** With double-buffering the frame time is, roughly, a pipeline of per-tile draws overlapped with per-tile transfers:
+
+```
+frame ≈ draw₀ + Σ max(drawᵢ₊₁, xferᵢ) + xfer_last   ≈   max(Σdraw, Σxfer)
+```
+
+so the frame is governed by whichever total is larger:
+
+- **`Σxfer` (SPI transfer) is essentially fixed per frame.** Every pixel of the surface is pushed exactly once, so `Σxfer` depends only on area, not on split count. A full 320×240×16bpp frame ≈ 32 ms on Core2 (≈ 31 fps — the hardware SPI floor); a smaller surface is proportionally less.
+- **`Σdraw` (CPU draw) is *not* fixed — it grows with the split count.** The draw callback is re-run once per tile (§5.4): every primitive is walked for every tile and clipped to it, even though only its in-tile span rasterizes. So a scene of *few large* primitives grows slowly with `N`, but a scene of *many* primitives (lots of shapes, text) has `Σdraw` rise steeply with `N`.
+
+**The consequence (this is the part that inverts intuition).** Increasing the split count never reduces `Σdraw`; it only ever adds redundant per-primitive work and per-tile overhead (`fillScreen`, `pushSprite`, `waitDMA`). So:
+
+- **Transfer-bound (`Σdraw < Σxfer`).** Transfer is the floor and overlap hides the draw. More, *smaller* tiles overlap more finely (and, double-buffered, cost *less* total RAM) → **increasing `N` helps**, up to the point where the transfer is fully overlapped.
+- **Draw-bound (`Σdraw > Σxfer`).** Transfer is already hidden behind the draw; adding tiles only piles on redundant redraw. → **you want *fewer*, larger tiles** — ideally a single tile (one draw pass, nothing to overlap). **Increasing `N` makes it worse.**
+
+So "two buffers overlapping draw and transfer is fastest" is true *only in the transfer-bound regime*. When the draw is the bottleneck, the best you can do is one draw pass (`Σdraw` at `N=1`) — and a single buffer already achieves that. The optimum `N` is the interior balance between overlap gain (which saturates at the transfer floor) and redundant-draw + overhead (which grows with `N`); where it lands depends on the **scene's** draw cost.
+
+**Where ≈ 19 KB comes from.** 19,200 B = a 320×30 tile at 16 bpp. A 30-row tile transfers in ≈ 4 ms and, for typical buffered GUI/animation scenes, draws in less — so a *large* surface stays transfer-bound at the resolved split and sits on the SPI floor, while a *small* surface resolves to a single tile (the draw-bound regime, where one tile is exactly right). On the Core2 benchmark (`bench/`) this one value reproduces the **measured-optimal** split at every tested size:
+
+| surface  | resolved split (19 KB) | matches bench optimum |
+|----------|------------------------|-----------------------|
+| 64×48    | 1 (single buffer)      | ✓ |
+| 128×96   | 2 (double)             | ✓ |
+| 160×100  | 2 (double)             | ✓ |
+| 240×160  | 4 (double)             | ✓ |
+| 320×240  | 8 (double)             | ✓ |
+
+It also bounds double-buffer RAM to ≈ 2 × 19 KB ≈ 38 KB *regardless of surface size* (only two tiles exist at once), and keeps every allocation small — avoiding the ~150 KB contiguous block a full-screen buffer needs (which fails even with 300 KB free; see `bench/`).
+
+**Can the library detect the regime and pick `N` itself?** Not from geometry alone: the draw callback is arbitrary user code whose per-frame cost the library cannot see ahead of time, and it can vary frame to frame. The default is therefore a fixed heuristic tuned for the transfer-bound-to-balanced workloads that buffered GUIs and animations usually are. **If your scene is unusually draw-heavy** — so that even the resolved tiles are draw-bound — prefer *fewer, larger* tiles: raise `setMemoryLimit()` or pin a low `setSplitCount()` (and a single buffer is often best). A runtime auto-tuner (measure `drawᵢ`/`xferᵢ` and adapt `N` with hysteresis) is feasible but is deliberately **out of scope for the default**, since it implies reallocation and frame-time jitter.
+
+### 10.7 Costly per-callback work (image decode, flash / PSRAM reads)
+
+§10.6 showed `Σdraw` grows with `N` because the callback re-runs per tile. For ordinary primitives that growth is modest. It becomes **severe** when the callback does fixed-cost work that the tile clip rectangle does *not* shrink — that work is paid in full on every tile, so it scales ≈ linearly with `N`:
+
+- **Decoding a compressed image (PNG / JPEG) in the callback.** The decoder must process the whole compressed stream to emit any row (DEFLATE / MCU decode is sequential); the clip only discards out-of-tile *output* pixels, not the decode. So a full-screen `drawPng` / `drawJpg` inside the tiled callback is **re-decoded on every tile** — `N` tiles ≈ `N` full decodes.
+- **Reading an asset from flash / SD / a file.** Each tile re-opens / re-reads (and usually re-decodes) the source; flash latency and file I/O are paid `N` times.
+- **Sampling source pixels held in PSRAM.** PSRAM is much slower than internal RAM, and the source is re-read once per tile. (A PSRAM-backed *tile* buffer also disables DMA, making the transfer synchronous — §10.5 — which compounds this.)
+- Any other fixed per-frame setup the clip can't reduce: large LUT builds, layout/measure passes, sensor polling, etc.
+
+By contrast, `pushImage` from an **in-RAM** buffer *is* clipped per tile — only the tile's source rows are read and pushed — which is why the benchmark's `image` scene (a tiled `pushImage` from a small RAM array) splits cheaply. The problem is specifically work the clip cannot reduce.
+
+**Rule of thumb:** if the callback's cost is dominated by such non-clippable work, splitting degrades performance ≈ `N`×, and the auto default's many-small-tiles shape is *wrong* for that workload.
+
+**Mitigations (in order):**
+
+1. **Decode / read once, then blit.** Do the expensive decode or flash read **outside** the tiled callback — once, into an internal-RAM sprite or buffer (at setup, or only when the image changes) — and in the per-tile callback just `pushImage` / `pushSprite` from that decoded buffer. `pushImage` is clipped per tile, so this turns `N`× decode into **1× decode + `N`× cheap clipped blit**. Recommended for static or rarely-changing images.
+2. **Use fewer / larger tiles.** Raise `setMemoryLimit()` or set a low `setSplitCount()` so `N` is small (trading internal RAM); a single tile pays the decode exactly once.
+3. **Skip tiling for a full-screen image that fits** — draw it straight to the panel or one full-screen sprite, and use the tiled canvas only for the dynamic overlay.
+
 ## 11. Tile initialization (auto-clear) and fillScreen
 
 ### 11.1 auto-clear (the tile's initial state)

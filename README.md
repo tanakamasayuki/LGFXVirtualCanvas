@@ -131,6 +131,14 @@ Allocation is **lazy**: nothing is allocated until `begin()` or the first
 If allocation cannot satisfy the request, it fails — there is no silent
 fallback — and `render()` returns `false` without drawing.
 
+> ⚠️ **Decode images once, not per tile.** The draw callback re-runs for every
+> tile, so anything the tile clip can't shrink — decoding a PNG/JPEG, reading
+> from flash/SD, or sampling source pixels in PSRAM — is paid in full on *every*
+> tile and scales ≈ N× with the split count. Do the decode/read **once** (at
+> setup or on change) into an internal-RAM sprite, then `pushImage`/`pushSprite`
+> from it in the callback (that *is* clipped per tile). For very heavy callbacks,
+> use fewer/larger tiles (`setMemoryLimit` / `setSplitCount`). See SPEC §10.7.
+
 ## Partial updates with `LGFXVirtualSprite`
 
 To update only a part of the screen (a status area, a moving icon, a fixed
