@@ -223,6 +223,17 @@ void setup()
             snprintf(path, sizeof(path), "output/%s_split_%d.png", sc.name, s);
             save_png(lcd, path);
         }
+        // Double-buffer (ping-pong) must be pixel-identical to single-buffer.
+        // Exercised at a multi-tile split and one with a partial last tile.
+        for (int s : {3, 7})
+        {
+            LGFXVirtualScreen screen(lcd, s);
+            screen.setDoubleBuffer(true);
+            screen.render(sc.fn);
+            char path[80];
+            snprintf(path, sizeof(path), "output/%s_db_%d.png", sc.name, s);
+            save_png(lcd, path);
+        }
         Serial.printf("SCENE %s done\n", sc.name);
     }
 

@@ -197,6 +197,20 @@ public:
     void setBackgroundColor(uint32_t color) { _bgColor = color; }
     /// @brief Enable/disable clearing each tile before draw (default enabled). See SPEC §11.
     void setAutoClear(bool enable) { _autoClear = enable; }
+    /// @brief Enable double-buffering: two tile sprites ping-ponged so a tile's
+    ///        DMA transfer overlaps the next tile's draw (faster, 2× tile RAM).
+    ///
+    /// Default OFF (single buffer). With a single buffer the tile is reused for
+    /// the next tile, so the transfer must complete before the next draw — the
+    /// render loop waits for DMA after each push (correct, but draw and transfer
+    /// are serialized). With double-buffering, tile `i` transfers (async DMA)
+    /// from one buffer while tile `i+1` is drawn into the other; the SPI bus
+    /// serializes consecutive transfers, so a buffer is never overwritten while
+    /// its DMA is still in flight. Costs 2× the tile buffer (memoryLimit, if
+    /// set, still bounds each individual buffer). @see SPEC §10.5.
+    void setDoubleBuffer(bool enable) { _doubleBuffer = enable; _dirty = true; }
+    /// @brief Whether double-buffering is enabled.
+    bool doubleBuffer(void) const { return _doubleBuffer; }
 
     /// @brief Whether the tile buffer is allocated and current.
     bool isReady(void) const { return _ready && !_dirty; }
@@ -206,7 +220,7 @@ public:
     int tileHeight(void) const { return _tileHeight; }
 
 protected:
-    LGFXVirtualTiledBase(LovyanGFX &panel) : _panel(&panel), _tile(&panel) {}
+    LGFXVirtualTiledBase(LovyanGFX &panel) : _panel(&panel), _tile(&panel), _tile2(&panel) {}
 
     /// @brief Allocate the reusable tile sprite for a regionW × regionH surface.
     /// @return false on failure (no fallback — see SPEC §10.3).
@@ -222,11 +236,22 @@ protected:
             return false; // requested geometry cannot be satisfied
         }
         _tile.deleteSprite();
+        _tile2.deleteSprite();
         _tile.setColorDepth(_panel->getColorDepth());
         if (_tile.createSprite(regionW, tileH) == nullptr)
         {
             _ready = false;
             return false; // out of RAM
+        }
+        if (_doubleBuffer)
+        {
+            _tile2.setColorDepth(_panel->getColorDepth());
+            if (_tile2.createSprite(regionW, tileH) == nullptr)
+            {
+                _tile.deleteSprite(); // keep all-or-nothing: no half-allocated state
+                _ready = false;
+                return false; // out of RAM for the second buffer
+            }
         }
         _regionW = regionW;
         _regionH = regionH;
@@ -261,11 +286,22 @@ protected:
         for (int i = 0; i < _tileCount; ++i)
         {
             const int32_t offsetY = (int32_t)i * _tileHeight;
+            // Double-buffer: alternate tiles so tile i transfers (async DMA)
+            // while tile i+1 is drawn into the other buffer. The SPI bus
+            // serializes consecutive transfers, so the buffer reused here (last
+            // touched two tiles ago) is guaranteed free of in-flight DMA.
+            LGFX_Sprite &buf = (_doubleBuffer && (i & 1)) ? _tile2 : _tile;
             if (_autoClear)
-                _tile.fillScreen(_bgColor);
-            LGFXVirtualCanvas g(_tile, offsetY, _regionH);
+                buf.fillScreen(_bgColor);
+            LGFXVirtualCanvas g(buf, offsetY, _regionH);
             drawFn(g);
-            _tile.pushSprite(_panel, posX, posY + offsetY);
+            buf.pushSprite(_panel, posX, posY + offsetY);
+            // Single buffer: the same sprite is reused for the next tile, so we
+            // must not start overwriting it until this tile's DMA has finished
+            // reading it. (Without this the next fillScreen would corrupt the
+            // tile still being transferred — see SPEC §10.5.)
+            if (!_doubleBuffer)
+                _panel->waitDMA();
         }
         _panel->clearClipRect();
         _panel->endWrite();
@@ -297,6 +333,7 @@ private:
 protected:
     LovyanGFX *_panel;
     LGFX_Sprite _tile;
+    LGFX_Sprite _tile2; // second buffer, allocated only when _doubleBuffer
 
     // config
     size_t _memLimit = 0;
@@ -304,6 +341,7 @@ protected:
     int _tileHeightCfg = 0;
     uint32_t _bgColor = 0; // black
     bool _autoClear = true;
+    bool _doubleBuffer = false;
 
     // computed state
     int32_t _regionW = 0;

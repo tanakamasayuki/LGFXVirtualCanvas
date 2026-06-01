@@ -166,6 +166,7 @@ panel" — both share the same tiling engine.
 | `void setTileHeight(int height)` | Fixed tile height in pixels. |
 | `void setBackgroundColor(uint32_t color)` | auto-clear color (default black). |
 | `void setAutoClear(bool enable)` | Clear each tile before draw (default `true`). |
+| `void setDoubleBuffer(bool enable)` | Use two tile buffers so a tile's DMA transfer overlaps the next tile's draw (faster, 2× tile RAM; default `false`). See SPEC §10.5. |
 | `bool begin()` | Allocate the tile buffer now. `false` on failure (no fallback). |
 | `bool isReady() const` | Whether the buffer is allocated. |
 | `int tileCount() const` / `int tileHeight() const` | Resolved geometry after allocation. |

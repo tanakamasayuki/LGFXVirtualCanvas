@@ -317,6 +317,17 @@ For each tile `i` (`0..N-1`, `offsetY = i * tileH`):
 
 The whole loop's panel transfers are wrapped in a single `startWrite()` / `endWrite()`, batching the N pushes into one bus transaction (fewer SPI transaction setups / CS toggles on real hardware). Drawing into the tile is memory-only (no bus), so the draw callback itself needs no such bracketing. No-op on the bus-less host backend. For `LGFXVirtualSprite` the transfer target is `(x, y)` and the panel clip is set to `(x, y, w, h)` before pushing (§7.1).
 
+### 10.5 Buffer reuse, DMA, and double-buffering
+
+`pushSprite` of an internal-RAM (DMA-capable) tile starts an **asynchronous** SPI-DMA that reads the tile buffer directly and returns before the transfer completes; within the loop's outer `startWrite`/`endWrite` no per-tile bus wait happens (the nested per-push `startWrite`/`endWrite` only flush at the outermost level). So with a **single** reused tile buffer the next tile's clear/draw would overwrite the buffer while the previous tile's DMA is still reading it — corrupting the tile being transferred.
+
+Two modes resolve this:
+
+- **Single buffer (default).** After each `pushSprite` the loop calls `waitDMA()` so the transfer finishes before the buffer is reused. Correct, lowest memory, but draw and transfer are **serialized** (frame ≈ Σ draw + Σ transfer). `split=1` needs no extra wait (one push, then the final `endWrite` flushes). PSRAM tiles are inherently safe: LGFX disables DMA for SPIRAM sprites, so the transfer is synchronous (safe but slower).
+- **Double buffer (`setDoubleBuffer(true)`, opt-in).** Two tile sprites are allocated and ping-ponged (`i & 1`). Tile `i` transfers (async DMA) from one buffer while tile `i+1` is drawn into the other. Consecutive transfers on one SPI bus are serialized by the bus itself, so the buffer reused at tile `i` (last touched at tile `i-2`) is guaranteed free of in-flight DMA — no in-loop wait is needed, and CPU draw overlaps SPI transfer (frame ≈ max(draw, transfer) in the transfer-bound regime). Costs 2× the tile buffer; a `setMemoryLimit` still bounds each individual buffer. Allocation is all-or-nothing: if the second buffer cannot be allocated, `begin()`/`render()` fail (no fallback, per §10.3).
+
+Both modes produce **pixel-identical** output (verified by the parity test's double-buffer cases). On the bus-less host backend `waitDMA()` is a no-op and both modes render the same.
+
 ## 11. Tile initialization (auto-clear) and fillScreen
 
 ### 11.1 auto-clear (the tile's initial state)
