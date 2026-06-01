@@ -23,8 +23,8 @@
 #include "esp_heap_caps.h"
 
 // ---- benchmark configuration -------------------------------------------------
-static const int WARMUP = 5;    // frames discarded before timing
-static const int FRAMES = 60;   // timed frames per run (averaged)
+static const int WARMUP = 5;  // frames discarded before timing
+static const int FRAMES = 60; // timed frames per run (averaged)
 static const int SPLITS[] = {1, 2, 3, 4, 6, 8};
 static const int N_SPLITS = sizeof(SPLITS) / sizeof(SPLITS[0]);
 
@@ -96,9 +96,12 @@ void sceneImage(GFX &g, int f)
 template <class GFX>
 void runScene(GFX &g, int scene, int f)
 {
-    if (scene == 0) sceneLight(g, f);
-    else if (scene == 1) sceneHeavy(g, f);
-    else sceneImage(g, f);
+    if (scene == 0)
+        sceneLight(g, f);
+    else if (scene == 1)
+        sceneHeavy(g, f);
+    else
+        sceneImage(g, f);
 }
 
 // ---- concrete callbacks for the library (LGFXVirtualScreen / Sprite) ---------
@@ -119,10 +122,22 @@ static void row(const char *method, int split, int tileH,
 {
     const float fps = frame_us > 0 ? 1000000.0f / (float)frame_us : 0.0f;
     char ds[12], xs[12], sp[8], th[8];
-    if (draw_us < 0) snprintf(ds, sizeof(ds), "%8s", "-"); else snprintf(ds, sizeof(ds), "%8ld", draw_us);
-    if (xfer_us < 0) snprintf(xs, sizeof(xs), "%8s", "-"); else snprintf(xs, sizeof(xs), "%8ld", xfer_us);
-    if (split < 0) snprintf(sp, sizeof(sp), "%5s", "-"); else snprintf(sp, sizeof(sp), "%5d", split);
-    if (tileH < 0) snprintf(th, sizeof(th), "%5s", "-"); else snprintf(th, sizeof(th), "%5d", tileH);
+    if (draw_us < 0)
+        snprintf(ds, sizeof(ds), "%8s", "-");
+    else
+        snprintf(ds, sizeof(ds), "%8ld", draw_us);
+    if (xfer_us < 0)
+        snprintf(xs, sizeof(xs), "%8s", "-");
+    else
+        snprintf(xs, sizeof(xs), "%8ld", xfer_us);
+    if (split < 0)
+        snprintf(sp, sizeof(sp), "%5s", "-");
+    else
+        snprintf(sp, sizeof(sp), "%5d", split);
+    if (tileH < 0)
+        snprintf(th, sizeof(th), "%5s", "-");
+    else
+        snprintf(th, sizeof(th), "%5d", tileH);
     const size_t hi = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
     const size_t hp = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
     Serial.printf("%-22s %s %s %s %s %8ld %6.1f %8u %9u\n",
@@ -201,9 +216,17 @@ static void runLibraryScreen(int scene, int split, bool autoClear, bool doubleBu
         Serial.printf("  -- library begin() failed (split=%d db=%d, skipped)\n", split, doubleBuf);
         return;
     }
-    for (int i = 0; i < WARMUP; ++i) { g_frame = i; screen.render(sceneVC); }
+    for (int i = 0; i < WARMUP; ++i)
+    {
+        g_frame = i;
+        screen.render(sceneVC);
+    }
     const uint32_t t0 = micros();
-    for (int f = 0; f < FRAMES; ++f) { g_frame = f; screen.render(sceneVC); }
+    for (int f = 0; f < FRAMES; ++f)
+    {
+        g_frame = f;
+        screen.render(sceneVC);
+    }
     const long frame = (long)((micros() - t0) / FRAMES);
     char name[28];
     snprintf(name, sizeof(name), "%s screen ac=%s",
@@ -223,9 +246,17 @@ static void runLibrarySprite(int scene, int split)
         Serial.printf("  -- library sprite begin() failed (split=%d, skipped)\n", split);
         return;
     }
-    for (int i = 0; i < WARMUP; ++i) { g_frame = i; spr.render(sceneVC); }
+    for (int i = 0; i < WARMUP; ++i)
+    {
+        g_frame = i;
+        spr.render(sceneVC);
+    }
     const uint32_t t0 = micros();
-    for (int f = 0; f < FRAMES; ++f) { g_frame = f; spr.render(sceneVC); }
+    for (int f = 0; f < FRAMES; ++f)
+    {
+        g_frame = f;
+        spr.render(sceneVC);
+    }
     const long frame = (long)((micros() - t0) / FRAMES);
     row("C sprite 160x100", split, spr.tileHeight(), -1, -1, frame);
 }
@@ -238,10 +269,13 @@ static void runBlock(int scene, const char *name)
     runDirect(scene);
     runFullSprite(scene, false);
     // C: single buffer (correct, serialized) — autoClear on, then off
-    for (int s = 0; s < N_SPLITS; ++s) runLibraryScreen(scene, SPLITS[s], true, false);
-    for (int s = 0; s < N_SPLITS; ++s) runLibraryScreen(scene, SPLITS[s], false, false);
+    for (int s = 0; s < N_SPLITS; ++s)
+        runLibraryScreen(scene, SPLITS[s], true, false);
+    for (int s = 0; s < N_SPLITS; ++s)
+        runLibraryScreen(scene, SPLITS[s], false, false);
     // D: double buffer (draw/transfer overlap) — same split sweep, autoClear on
-    for (int s = 0; s < N_SPLITS; ++s) runLibraryScreen(scene, SPLITS[s], true, true);
+    for (int s = 0; s < N_SPLITS; ++s)
+        runLibraryScreen(scene, SPLITS[s], true, true);
     runLibrarySprite(scene, 3);
 
     // --- PSRAM block: baseline only (library has no PSRAM API in Phase 1) ---
@@ -255,7 +289,7 @@ void setup()
     auto cfg = M5.config();
     M5.begin(cfg);
     Serial.begin(115200);
-    delay(300);
+    delay(5000);
     PANEL_W = M5.Display.width();
     PANEL_H = M5.Display.height();
     buildImage();
