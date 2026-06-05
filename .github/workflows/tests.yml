@@ -25,8 +25,9 @@ jobs:
 
       - name: Setup arduino-cli
         uses: arduino/setup-arduino-cli@v2
-        with:
-          version: 1.4.0
+
+      - name: Show arduino-cli version
+        run: arduino-cli version
 
       - name: Initialize arduino-cli
         run: |
