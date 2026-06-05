@@ -2,20 +2,20 @@ profiles:
   m5stack_core2:
     fqbn: esp32:esp32:m5stack_core2
     platforms:
-      - platform: esp32:esp32 (3.3.8)
+      - platform: esp32:esp32 (3.3.9)
         platform_index_url: https://espressif.github.io/arduino-esp32/package_esp32_index.json
     libraries:
-      - M5Unified (0.2.16)
+      - M5Unified (0.2.17)
       - M5GFX (0.2.22)
       - dir : ../../
 
   m5stack_cores3:
     fqbn: esp32:esp32:m5stack_cores3
     platforms:
-      - platform: esp32:esp32 (3.3.8)
+      - platform: esp32:esp32 (3.3.9)
         platform_index_url: https://espressif.github.io/arduino-esp32/package_esp32_index.json
     libraries:
-      - M5Unified (0.2.16)
+      - M5Unified (0.2.17)
       - M5GFX (0.2.22)
       - dir : ../../
 
