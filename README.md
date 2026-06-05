@@ -110,8 +110,11 @@ normal rendering, tiled rendering, and headless tests.
 
 ## Controlling memory
 
-By default the screen uses **3 tiles**. You usually care about RAM, not tile
-count, so set a budget — the library picks the largest tile height that fits:
+By default the screen targets **≈ 19 KB per tile**, so the split count scales
+with the surface: a small sprite stays one tile, a full screen becomes several.
+It also **auto-enables double-buffering whenever more than one tile is needed**
+(a single tile stays single-buffered — nothing to overlap). You usually care
+about RAM, not tile count, so you can set your own budget to override:
 
 ```cpp
 void setup() {
@@ -127,6 +130,14 @@ Allocation is **lazy**: nothing is allocated until `begin()` or the first
 `render()` (the screen size is unknown before `lcd.init()` / `M5.begin()`).
 If allocation cannot satisfy the request, it fails — there is no silent
 fallback — and `render()` returns `false` without drawing.
+
+> ⚠️ **Decode images once, not per tile.** The draw callback re-runs for every
+> tile, so anything the tile clip can't shrink — decoding a PNG/JPEG, reading
+> from flash/SD, or sampling source pixels in PSRAM — is paid in full on *every*
+> tile and scales ≈ N× with the split count. Do the decode/read **once** (at
+> setup or on change) into an internal-RAM sprite, then `pushImage`/`pushSprite`
+> from it in the callback (that *is* clipped per tile). For very heavy callbacks,
+> use fewer/larger tiles (`setMemoryLimit` / `setSplitCount`). See SPEC §10.7.
 
 ## Partial updates with `LGFXVirtualSprite`
 
@@ -160,13 +171,13 @@ panel" — both share the same tiling engine.
 
 | Member | Description |
 |---|---|
-| `LGFXVirtualScreen(LovyanGFX& panel, int splitCount = 0)` | Construct over a panel. `0` = auto (default 3 tiles). Nothing is allocated yet. |
+| `LGFXVirtualScreen(LovyanGFX& panel, int splitCount = 0)` | Construct over a panel. `0` = auto (≈ 19 KB/tile budget). Nothing is allocated yet. |
 | `void setMemoryLimit(size_t bytes)` | Cap the tile buffer; tile height is derived from it (highest priority). |
 | `void setSplitCount(int count)` | Fixed number of tiles. |
 | `void setTileHeight(int height)` | Fixed tile height in pixels. |
 | `void setBackgroundColor(uint32_t color)` | auto-clear color (default black). |
 | `void setAutoClear(bool enable)` | Clear each tile before draw (default `true`). |
-| `void setDoubleBuffer(bool enable)` | Use two tile buffers so a tile's DMA transfer overlaps the next tile's draw (faster, 2× tile RAM; default `false`). See SPEC §10.5. |
+| `void setDoubleBuffer(bool enable)` | Use two tile buffers so a tile's DMA transfer overlaps the next tile's draw (faster, 2× tile RAM). Overrides the default **auto** mode (on when ≥ 2 tiles, off for a single tile). See SPEC §10.5. |
 | `bool begin()` | Allocate the tile buffer now. `false` on failure (no fallback). |
 | `bool isReady() const` | Whether the buffer is allocated. |
 | `int tileCount() const` / `int tileHeight() const` | Resolved geometry after allocation. |
@@ -178,7 +189,8 @@ The draw callback must be a **function pointer** (capturing lambdas /
 `std::function` are not accepted, to keep code size down).
 
 Priority when several are set: `setMemoryLimit` > `setSplitCount` >
-`setTileHeight` > default (3).
+`setTileHeight` > default (≈ 19 KB/tile budget). With nothing set,
+double-buffering is auto-enabled when the surface resolves to ≥ 2 tiles.
 
 ### `LGFXVirtualSprite` — a tiled sub-region
 

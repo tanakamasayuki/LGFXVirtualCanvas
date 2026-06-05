@@ -26,9 +26,14 @@ def test_memory(dut):
     begin, ready, render = (int(x) for x in _m(dut, r"TINY limit=4 begin=(\d) ready=(\d) render=(\d)"))
     assert (begin, ready, render) == (0, 0, 0), "too-small budget must fail without fallback"
 
-    # guardrail: render() before begin() auto-allocates with the default 3 splits.
+    # guardrail: render() before begin() auto-allocates with the default config.
+    # The no-arg default is the size-aware tile budget (SPEC §10.1), so the split
+    # count is derived from DEFAULT_TILE_BYTES, not a fixed 3.
+    DEFAULT_TILE_BYTES = 19200  # mirror of LGFXVirtualTiledBase::DEFAULT_TILE_BYTES
+    default_th = min(H, DEFAULT_TILE_BYTES // bytes_per_row)
+    expected_n = (H + default_th - 1) // default_th
     render, ready, n = (int(x) for x in _m(dut, r"GUARDRAIL render=(\d) ready=(\d) N=(\d+)"))
     assert (render, ready) == (1, 1), "guardrail should auto-allocate on first render"
-    assert n == 3, "default split count should be 3"
+    assert n == expected_n, f"default split count should be {expected_n} for the ~19KB/tile budget"
 
     dut.expect("TEST done", timeout=5)

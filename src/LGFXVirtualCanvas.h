@@ -187,6 +187,19 @@ public:
     /// @brief Raw draw-callback type (function pointer + ctx).
     using DrawRaw = void (*)(LGFXVirtualCanvas &g, void *ctx);
 
+    /// @brief Default per-tile memory budget for the no-arg/auto path (≈ 19 KB).
+    ///
+    /// When nothing is configured (no memoryLimit, splitCount, or tileHeight),
+    /// the split count is derived so each tile fits this budget — exactly like
+    /// setMemoryLimit() — so it scales with surface size (small surface → 1 tile,
+    /// full screen → several). 19200 = a 320×30 tile at 16 bpp; taken from the
+    /// Core2 benchmark, where it reproduces the measured-optimal split at every
+    /// tested size while keeping each tile small (double-buffer total ≈ 2× this,
+    /// and the small allocations avoid large-contiguous-block failures). A
+    /// draw-bound workload may prefer fewer/larger tiles — override with
+    /// setSplitCount()/setMemoryLimit(). See SPEC §10.1.
+    static constexpr size_t DEFAULT_TILE_BYTES = 19200;
+
     /// @brief Cap the tile buffer to @p bytes; tile height is derived from it (highest priority). 0 = unset.
     void setMemoryLimit(size_t bytes) { _memLimit = bytes; _dirty = true; }
     /// @brief Use a fixed number of tiles @p count. 0 = unset.
@@ -197,19 +210,23 @@ public:
     void setBackgroundColor(uint32_t color) { _bgColor = color; }
     /// @brief Enable/disable clearing each tile before draw (default enabled). See SPEC §11.
     void setAutoClear(bool enable) { _autoClear = enable; }
-    /// @brief Enable double-buffering: two tile sprites ping-ponged so a tile's
-    ///        DMA transfer overlaps the next tile's draw (faster, 2× tile RAM).
+    /// @brief Force double-buffering on/off, overriding the default auto mode.
     ///
-    /// Default OFF (single buffer). With a single buffer the tile is reused for
-    /// the next tile, so the transfer must complete before the next draw — the
-    /// render loop waits for DMA after each push (correct, but draw and transfer
-    /// are serialized). With double-buffering, tile `i` transfers (async DMA)
-    /// from one buffer while tile `i+1` is drawn into the other; the SPI bus
-    /// serializes consecutive transfers, so a buffer is never overwritten while
-    /// its DMA is still in flight. Costs 2× the tile buffer (memoryLimit, if
-    /// set, still bounds each individual buffer). @see SPEC §10.5.
-    void setDoubleBuffer(bool enable) { _doubleBuffer = enable; _dirty = true; }
-    /// @brief Whether double-buffering is enabled.
+    /// **Default is auto** (this setter unset): double-buffering is enabled when
+    /// the surface resolves to ≥ 2 tiles, and stays off for a single tile (where
+    /// there is no neighbouring tile to overlap with, so a second buffer is pure
+    /// waste). Call this to override that decision explicitly.
+    ///
+    /// With a single buffer the tile is reused for the next tile, so the transfer
+    /// must complete before the next draw — the render loop waits for DMA after
+    /// each push (correct, but draw and transfer are serialized). With
+    /// double-buffering, tile `i` transfers (async DMA) from one buffer while
+    /// tile `i+1` is drawn into the other; the SPI bus serializes consecutive
+    /// transfers, so a buffer is never overwritten while its DMA is still in
+    /// flight. Costs 2× the tile buffer (memoryLimit, if set, still bounds each
+    /// individual buffer). @see SPEC §10.5.
+    void setDoubleBuffer(bool enable) { _dbMode = enable ? DBMode::On : DBMode::Off; _dirty = true; }
+    /// @brief Whether double-buffering is active (resolved at begin(); false before allocation).
     bool doubleBuffer(void) const { return _doubleBuffer; }
 
     /// @brief Whether the tile buffer is allocated and current.
@@ -235,6 +252,23 @@ protected:
             _ready = false;
             return false; // requested geometry cannot be satisfied
         }
+        const int tileCount = (int)((regionH + tileH - 1) / tileH);
+        // Resolve the double-buffer mode now that the tile count is known. Auto
+        // enables it only when there are ≥ 2 tiles (a single tile has nothing to
+        // overlap with). An explicit setDoubleBuffer() wins. See SPEC §10.5.
+        bool wantDouble;
+        switch (_dbMode)
+        {
+        case DBMode::On:
+            wantDouble = true;
+            break;
+        case DBMode::Off:
+            wantDouble = false;
+            break;
+        default:
+            wantDouble = (tileCount >= 2);
+            break;
+        }
         _tile.deleteSprite();
         _tile2.deleteSprite();
         _tile.setColorDepth(_panel->getColorDepth());
@@ -243,7 +277,7 @@ protected:
             _ready = false;
             return false; // out of RAM
         }
-        if (_doubleBuffer)
+        if (wantDouble)
         {
             _tile2.setColorDepth(_panel->getColorDepth());
             if (_tile2.createSprite(regionW, tileH) == nullptr)
@@ -256,7 +290,8 @@ protected:
         _regionW = regionW;
         _regionH = regionH;
         _tileHeight = tileH;
-        _tileCount = (regionH + tileH - 1) / tileH;
+        _tileCount = tileCount;
+        _doubleBuffer = wantDouble; // resolved effective mode (read by renderRegion)
         _ready = true;
         _dirty = false;
         return true;
@@ -310,24 +345,31 @@ protected:
 
 private:
     // Decide tile height from config + surface size. SPEC §10.1 priority:
-    // memoryLimit > splitCount > tileHeight > default(3).
+    // memoryLimit > splitCount > tileHeight > default tile budget (size-aware).
     int32_t computeTileHeight(int32_t W, int32_t H, int bits) const
     {
         if (_memLimit > 0)
-        {
-            const size_t bytesPerRow = ((size_t)W * (size_t)bits + 7) / 8;
-            if (bytesPerRow == 0)
-                return 0;
-            int32_t th = (int32_t)(_memLimit / bytesPerRow);
-            if (th < 1)
-                return 0; // cannot fit even one row → fail (no rounding)
-            return (th > H) ? H : th;
-        }
+            return tileHForBudget(W, H, bits, _memLimit);
         if (_splitCount > 0)
             return (H + _splitCount - 1) / _splitCount;
         if (_tileHeightCfg > 0)
             return (_tileHeightCfg > H) ? H : _tileHeightCfg;
-        return (H + 2) / 3; // default 3 splits
+        // Nothing set: derive split from the default per-tile budget so it scales
+        // with surface size (small → 1 tile, full screen → several). See SPEC §10.1.
+        return tileHForBudget(W, H, bits, DEFAULT_TILE_BYTES);
+    }
+
+    // Largest tile height whose row span fits @p budget bytes, clamped to H.
+    // Returns 0 if a single row already exceeds the budget (cannot satisfy).
+    static int32_t tileHForBudget(int32_t W, int32_t H, int bits, size_t budget)
+    {
+        const size_t bytesPerRow = ((size_t)W * (size_t)bits + 7) / 8;
+        if (bytesPerRow == 0)
+            return 0;
+        int32_t th = (int32_t)(budget / bytesPerRow);
+        if (th < 1)
+            return 0; // cannot fit even one row → fail (no rounding)
+        return (th > H) ? H : th;
     }
 
 protected:
@@ -335,13 +377,18 @@ protected:
     LGFX_Sprite _tile;
     LGFX_Sprite _tile2; // second buffer, allocated only when _doubleBuffer
 
+    // Double-buffer request: Auto resolves to On when the surface needs ≥ 2 tiles
+    // (decided in beginRegion); setDoubleBuffer() sets On/Off explicitly.
+    enum class DBMode { Auto, Off, On };
+
     // config
     size_t _memLimit = 0;
     int _splitCount = 0;
     int _tileHeightCfg = 0;
     uint32_t _bgColor = 0; // black
     bool _autoClear = true;
-    bool _doubleBuffer = false;
+    DBMode _dbMode = DBMode::Auto;
+    bool _doubleBuffer = false; // resolved effective mode (set in beginRegion)
 
     // computed state
     int32_t _regionW = 0;
@@ -363,7 +410,7 @@ class LGFXVirtualScreen : public LGFXVirtualTiledBase
 public:
     /// @brief Construct over @p panel. Nothing is allocated yet.
     /// @param panel      The real display (an LGFX, M5GFX, or M5.Display).
-    /// @param splitCount Number of tiles; 0 = auto (default 3). See SPEC §10.1.
+    /// @param splitCount Number of tiles; 0 = auto (size-aware ~19 KB/tile budget). See SPEC §10.1.
     explicit LGFXVirtualScreen(LovyanGFX &panel, int splitCount = 0)
         : LGFXVirtualTiledBase(panel) { _splitCount = splitCount; }
 

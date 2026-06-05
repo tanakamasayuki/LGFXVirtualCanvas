@@ -11,7 +11,7 @@
 #include <LGFXVirtualCanvas.h>
 
 static LGFX lcd;
-LGFXVirtualScreen screen(lcd); // default: auto (3 splits)
+LGFXVirtualScreen screen(lcd); // default: auto (~19 KB/tile, auto double-buffer)
 
 void drawScene(LGFXVirtualCanvas &g)
 {
