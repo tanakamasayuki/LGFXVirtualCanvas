@@ -210,11 +210,19 @@ Priority methods to implement:
 - `drawFastVLine`
 - `fillRect`
 - `drawRect`
+- `fillRoundRect`
+- `drawRoundRect`
 - `drawCircle`
 - `fillCircle`
+- `drawEllipse`
+- `fillEllipse`
+- `drawTriangle`
+- `fillTriangle`
 - `drawString`
 - `drawCentreString`
 - `drawRightString`
+- `setFont`
+- `setTextFont`
 - `setCursor`
 - `print`
 - `println`
@@ -223,7 +231,7 @@ Priority methods to implement:
 
 Color-taking methods preserve the color argument's type via a template and forward it unchanged to the internal sprite (thin type-preserving sugar; §5.4). String-taking methods (`drawString` family) template both the string type (`const char*` / `String`) and the font argument (`uint8_t` / `IFont*`); `print` / `println` generically forward all Arduino Print overloads (numbers, base, etc.).
 
-> Implementation status: **all priority methods above are implemented as of v0.1** (verified by the parity / pushimage tests). `setTextColor` / `setTextSize` / `setTextDatum` / `setCursor` / `getCursorX/Y` (returns virtual coords) are also provided.
+> Implementation status: **all priority methods above are implemented** (verified by the parity / pushimage tests). `setTextColor` / `setTextSize` / `setTextDatum` / `setCursor` / `getCursorX/Y` (returns virtual coords) are also provided.
 
 ## 9. APIs that need special care
 

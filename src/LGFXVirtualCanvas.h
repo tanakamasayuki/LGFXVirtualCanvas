@@ -82,6 +82,14 @@ public:
     template <typename T>
     void drawRect(int32_t x, int32_t y, int32_t w, int32_t h, const T &color) { _tile.drawRect(x, y - _offsetY, w, h, color); }
 
+    /// @brief Fill a rounded rectangle at virtual (@p x, @p y) of size @p w × @p h.
+    template <typename T>
+    void fillRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, const T &color) { _tile.fillRoundRect(x, y - _offsetY, w, h, r, color); }
+
+    /// @brief Draw a rounded rectangle outline at virtual (@p x, @p y) of size @p w × @p h.
+    template <typename T>
+    void drawRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, const T &color) { _tile.drawRoundRect(x, y - _offsetY, w, h, r, color); }
+
     /// @brief Draw a circle outline of radius @p r centered at virtual (@p x, @p y).
     template <typename T>
     void drawCircle(int32_t x, int32_t y, int32_t r, const T &color) { _tile.drawCircle(x, y - _offsetY, r, color); }
@@ -89,6 +97,22 @@ public:
     /// @brief Fill a circle of radius @p r centered at virtual (@p x, @p y).
     template <typename T>
     void fillCircle(int32_t x, int32_t y, int32_t r, const T &color) { _tile.fillCircle(x, y - _offsetY, r, color); }
+
+    /// @brief Draw an ellipse outline centered at virtual (@p x, @p y).
+    template <typename T>
+    void drawEllipse(int32_t x, int32_t y, int32_t rx, int32_t ry, const T &color) { _tile.drawEllipse(x, y - _offsetY, rx, ry, color); }
+
+    /// @brief Fill an ellipse centered at virtual (@p x, @p y).
+    template <typename T>
+    void fillEllipse(int32_t x, int32_t y, int32_t rx, int32_t ry, const T &color) { _tile.fillEllipse(x, y - _offsetY, rx, ry, color); }
+
+    /// @brief Draw a triangle through virtual points (@p x0,@p y0), (@p x1,@p y1), (@p x2,@p y2).
+    template <typename T>
+    void drawTriangle(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2, const T &color) { _tile.drawTriangle(x0, y0 - _offsetY, x1, y1 - _offsetY, x2, y2 - _offsetY, color); }
+
+    /// @brief Fill a triangle through virtual points (@p x0,@p y0), (@p x1,@p y1), (@p x2,@p y2).
+    template <typename T>
+    void fillTriangle(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2, const T &color) { _tile.fillTriangle(x0, y0 - _offsetY, x1, y1 - _offsetY, x2, y2 - _offsetY, color); }
 
     /// @brief Push a @p w × @p h image to virtual (@p x, @p y).
     /// @note The sprite's per-pixel clip discards rows outside the tile
@@ -119,6 +143,11 @@ public:
     void setTextSize(float size) { _tile.setTextSize(size); }
     /// @brief Set the text datum (alignment anchor) used by drawString().
     void setTextDatum(textdatum_t datum) { _tile.setTextDatum(datum); }
+    /// @brief Set the current text font (e.g. a built-in font pointer).
+    template <typename F>
+    void setFont(const F &font) { _tile.setFont(font); }
+    /// @brief Set the current built-in text font by number.
+    void setTextFont(uint8_t font) { _tile.setTextFont(font); }
 
     /// @brief Draw @p str at virtual (@p x, @p y). @p str may be const char* or String.
     template <typename S>

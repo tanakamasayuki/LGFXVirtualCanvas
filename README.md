@@ -214,11 +214,13 @@ maps your full-screen (virtual) coordinates onto the current tile. Supported:
 
 - Geometry: `width()`, `height()` (the full virtual screen)
 - Shapes: `fillScreen`, `drawPixel`, `drawLine`, `drawFastHLine`,
-  `drawFastVLine`, `fillRect`, `drawRect`, `drawCircle`, `fillCircle`
+  `drawFastVLine`, `fillRect`, `drawRect`, `fillRoundRect`,
+  `drawRoundRect`, `drawCircle`, `fillCircle`, `drawEllipse`,
+  `fillEllipse`, `drawTriangle`, `fillTriangle`
 - Image: `pushImage`
 - Text: `setCursor`, `getCursorX/Y`, `setTextColor`, `setTextSize`,
-  `setTextDatum`, `drawString`, `drawCentreString`, `drawRightString`,
-  `print`, `println`, `printf`
+  `setTextDatum`, `setFont`, `setTextFont`, `drawString`,
+  `drawCentreString`, `drawRightString`, `print`, `println`, `printf`
 
 Calling a method that is not (yet) wrapped is a compile error — by design, so
 unsupported drawing fails loudly rather than silently.

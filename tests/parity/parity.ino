@@ -81,11 +81,24 @@ static void sceneCircles(LGFXVirtualCanvas &g) // T1-3
     g.fillCircle(W / 2, H / 2, 12, TFT_WHITE);
 }
 
+static void sceneMoreShapes(LGFXVirtualCanvas &g) // T1-2/T1-3: additional safe primitives
+{
+    const int W = g.width(), H = g.height();
+    g.fillScreen(TFT_BLACK);
+    g.fillRoundRect(8, 8, W / 2, 36, 8, TFT_DARKGREEN);
+    g.drawRoundRect(W / 3, H / 2 - 24, W / 2, 48, 12, TFT_YELLOW);
+    g.fillEllipse(W / 4, H - 40, 34, 18, TFT_BLUE);
+    g.drawEllipse(3 * W / 4, 42, 42, 24, TFT_CYAN);
+    g.fillTriangle(12, H / 2, W / 3, H / 2 + 48, W / 2, H / 2 - 12, TFT_RED);
+    g.drawTriangle(W - 12, H - 12, W / 2, H - 42, W - 48, H / 2, TFT_WHITE);
+}
+
 static void sceneText(LGFXVirtualCanvas &g) // T1-4
 {
     const int H = g.height();
     g.fillScreen(TFT_NAVY);
     g.setTextColor(TFT_WHITE);
+    g.setTextFont(1);
     g.drawString("drawString top", 4, 2);
     g.drawString("drawString mid", 4, H / 2);
     g.drawString("drawString low", 4, H - 16);
@@ -100,9 +113,10 @@ static void sceneText2(LGFXVirtualCanvas &g) // T1-4: centre/right + numeric pri
     const int W = g.width(), H = g.height();
     g.fillScreen(TFT_BLACK);
     g.setTextColor(TFT_WHITE);
+    g.setFont(&fonts::Font2);
     g.drawString("left", 0, 4);
     g.drawCentreString("centre", W / 2, H / 2 - 8);
-    g.drawRightString("right", W, H - 16);
+    g.drawRightString("right", W, H - 20, 1);
     g.setCursor(4, 30);
     g.print(42);
     g.print(' ');
@@ -191,6 +205,7 @@ static const Scene scenes[] = {
     {"overall", sceneOverall},
     {"shapes", sceneShapes},
     {"circles", sceneCircles},
+    {"more_shapes", sceneMoreShapes},
     {"text", sceneText},
     {"text2", sceneText2},
     {"boundary", sceneBoundary},
