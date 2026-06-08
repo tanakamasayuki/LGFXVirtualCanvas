@@ -586,4 +586,33 @@ The minimum viable version satisfies:
 - Basic shapes and text rendering work.
 - The result is identical regardless of split count (the full render = split:1 vs tiled-render PNG comparison test passes).
 - Testable on GitHub Actions.
-```
+
+## Appendix: LGFXBase → `LGFXVirtualCanvas` mapping (table)
+
+The table below maps representative LovyanGFX APIs (`LGFXBase` / `LGFX_Sprite`) to where they are handled in this library and the current support status.
+
+| LovyanGFX API (representative) | `LGFXVirtualCanvas` / manager mapping | Support | Notes |
+|---|---:|:--:|---|
+| `fillScreen(color)` | `LGFXVirtualCanvas::fillScreen` | Supported | fills the tile; offset-independent |
+| `drawPixel(x,y, color)` | `LGFXVirtualCanvas::drawPixel` | Supported | subtracts `offsetY` and forwards to `_tile.drawPixel` |
+| `drawFastHLine` / `drawFastVLine` | `LGFXVirtualCanvas::drawFastHLine` / `drawFastVLine` | Supported | adjusts `y` and forwards to `_tile` |
+| `drawLine` / `drawTriangle` / `fillTriangle` | forwarded | Supported | same-name methods on `LGFXVirtualCanvas` (apply `y` correction) |
+| `fillRect` / `drawRect` | forwarded | Supported | same-name methods (apply `y` correction) |
+| `fillRoundRect` / `drawRoundRect` | forwarded | Supported | same-name methods (apply `y` correction) |
+| `drawCircle` / `fillCircle` | forwarded | Supported | same-name methods (apply `y` correction) |
+| `drawEllipse` / `fillEllipse` | forwarded | Supported | same-name methods (apply `y` correction) |
+| text drawing (`drawString`, `drawCentreString`, `drawRightString`) | `LGFXVirtualCanvas` text APIs | Supported | `y` corrected; font arg (`uint8_t` / `IFont*`) forwarded |
+| text settings (`setCursor`, `getCursorX/Y`, `setTextColor`, `setTextSize`, `setTextDatum`, `setFont`, `setTextFont`) | `LGFXVirtualCanvas` text APIs | Supported (with caveats) | `setCursor(x,y)` subtracts `offsetY`; `getCursorY()` returns virtual coord (`+ offsetY`). Behaviors that depend on tileH (auto-scroll, bottom wrapping) may differ (see §9.1). |
+| `print` / `println` / `printf` | `LGFXVirtualCanvas::print` / `println` / `printf` | Supported | Arduino `Print` overloads forwarded to `_tile` |
+| `pushImage(...)` (various overloads, transparent, palettes) | `LGFXVirtualCanvas::pushImage` | Supported (experimentally) | `y` corrected; the sprite per-pixel clip reproduces tile-boundary cases (§9.2). Rotate/zoom/palette/AA variants need further verification. |
+| `pushImageRotateZoom` / `pushImageAffine` / similar advanced image APIs | - | Not supported / future | Many overloads and edge cases; requires dedicated verification for tiling and transparency/AA/palette handling |
+| low-level transfer / DMA / clip (`startWrite`, `endWrite`, `waitDMA`, `setClipRect`) | controlled by `LGFXVirtualTiledBase::renderRegion` | Supported (manager-side) | renderRegion manages `startWrite`/`setClipRect`/`endWrite` and single/double-buffer DMA waits |
+| low-level pixel writes (`writePixels`, `pushPixels`, `writeFillRectPreclipped`) | - | Not implemented (yet) | These blocking low-level APIs are not exposed on `LGFXVirtualCanvas`; consider adding if required |
+| read APIs (`readPixel`, `readRect`) | - | Not supported | `LGFXVirtualCanvas` is a draw-focused wrapper; readback semantics in tiled mode need design/spec before implementation |
+| management APIs (`setMemoryLimit`, `setSplitCount`, `setTileHeight`, `setBackgroundColor`, `setAutoClear`, `setDoubleBuffer`, `doubleBuffer`, `isReady`, `tileCount`, `tileHeight`) | `LGFXVirtualTiledBase` / `LGFXVirtualScreen` / `LGFXVirtualSprite` | Supported | tile allocation, split resolution, auto-clear and double-buffer policies live here |
+
+Notes:
+- `Supported` indicates the feature is implemented in `src/LGFXVirtualCanvas.h` and exercised by tests; `Not supported` means it is not implemented; `Partially` or `Supported (with caveats)` indicate implemented but requiring edge-case testing or known limitations.
+- LovyanGFX offers many templated/overloaded drawing APIs; a complete 1:1 mapping is non-trivial. Priorities for future work: (1) advanced image transforms (`pushImageRotateZoom`, `pushImageAffine`), (2) readback APIs, (3) low-level blocking pixel-write APIs as needed.
+- If you want, I can export this table as CSV, create GitHub Issues for each `Not supported` item with suggested priority, or add an explicit implementation plan per item.
+
