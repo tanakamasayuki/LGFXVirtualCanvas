@@ -596,23 +596,31 @@ The table below maps representative LovyanGFX APIs (`LGFXBase` / `LGFX_Sprite`) 
 | `fillScreen(color)` | `LGFXVirtualCanvas::fillScreen` | Supported | fills the tile; offset-independent |
 | `drawPixel(x,y, color)` | `LGFXVirtualCanvas::drawPixel` | Supported | subtracts `offsetY` and forwards to `_tile.drawPixel` |
 | `drawFastHLine` / `drawFastVLine` | `LGFXVirtualCanvas::drawFastHLine` / `drawFastVLine` | Supported | adjusts `y` and forwards to `_tile` |
-| `drawLine` / `drawTriangle` / `fillTriangle` | forwarded | Supported | same-name methods on `LGFXVirtualCanvas` (apply `y` correction) |
-| `fillRect` / `drawRect` | forwarded | Supported | same-name methods (apply `y` correction) |
-| `fillRoundRect` / `drawRoundRect` | forwarded | Supported | same-name methods (apply `y` correction) |
-| `drawCircle` / `fillCircle` | forwarded | Supported | same-name methods (apply `y` correction) |
-| `drawEllipse` / `fillEllipse` | forwarded | Supported | same-name methods (apply `y` correction) |
-| text drawing (`drawString`, `drawCentreString`, `drawRightString`) | `LGFXVirtualCanvas` text APIs | Supported | `y` corrected; font arg (`uint8_t` / `IFont*`) forwarded |
-| text settings (`setCursor`, `getCursorX/Y`, `setTextColor`, `setTextSize`, `setTextDatum`, `setFont`, `setTextFont`) | `LGFXVirtualCanvas` text APIs | Supported (with caveats) | `setCursor(x,y)` subtracts `offsetY`; `getCursorY()` returns virtual coord (`+ offsetY`). Behaviors that depend on tileH (auto-scroll, bottom wrapping) may differ (see §9.1). |
-| `print` / `println` / `printf` | `LGFXVirtualCanvas::print` / `println` / `printf` | Supported | Arduino `Print` overloads forwarded to `_tile` |
-| `pushImage(...)` (various overloads, transparent, palettes) | `LGFXVirtualCanvas::pushImage` | Supported (experimentally) | `y` corrected; the sprite per-pixel clip reproduces tile-boundary cases (§9.2). Rotate/zoom/palette/AA variants need further verification. |
-| `pushImageRotateZoom` / `pushImageAffine` / similar advanced image APIs | - | Not supported / future | Many overloads and edge cases; requires dedicated verification for tiling and transparency/AA/palette handling |
-| low-level transfer / DMA / clip (`startWrite`, `endWrite`, `waitDMA`, `setClipRect`) | controlled by `LGFXVirtualTiledBase::renderRegion` | Supported (manager-side) | renderRegion manages `startWrite`/`setClipRect`/`endWrite` and single/double-buffer DMA waits |
-| low-level pixel writes (`writePixels`, `pushPixels`, `writeFillRectPreclipped`) | - | Not implemented (yet) | These blocking low-level APIs are not exposed on `LGFXVirtualCanvas`; consider adding if required |
-| read APIs (`readPixel`, `readRect`) | - | Not supported | `LGFXVirtualCanvas` is a draw-focused wrapper; readback semantics in tiled mode need design/spec before implementation |
-| management APIs (`setMemoryLimit`, `setSplitCount`, `setTileHeight`, `setBackgroundColor`, `setAutoClear`, `setDoubleBuffer`, `doubleBuffer`, `isReady`, `tileCount`, `tileHeight`) | `LGFXVirtualTiledBase` / `LGFXVirtualScreen` / `LGFXVirtualSprite` | Supported | tile allocation, split resolution, auto-clear and double-buffer policies live here |
+| `drawLine` / `drawTriangle` / `fillTriangle` | `LGFXVirtualCanvas::drawLine` / `drawTriangle` / `fillTriangle` | Supported | same-name methods on `LGFXVirtualCanvas` (apply `y` correction) |
+| `fillRect` / `drawRect` / `writeFillRectPreclipped` | `LGFXVirtualCanvas::fillRect` / `drawRect` | Supported / Not implemented | `fillRect`/`drawRect` are forwarded. low-level `writeFillRectPreclipped` not provided (could be added if needed). |
+| `fillRoundRect` / `drawRoundRect` | `LGFXVirtualCanvas::fillRoundRect` / `drawRoundRect` | Supported | forwarded (apply `y` correction) |
+| `drawCircle` / `fillCircle` / `drawCircleHelper` / `fillCircleHelper` | `LGFXVirtualCanvas::drawCircle` / `fillCircle` | Supported / Partial | basic circle APIs forwarded; helper variants not explicitly defined in Canvas (add if required). |
+| `drawEllipse` / `fillEllipse` / `drawEllipseArc` / `fillEllipseArc` | `LGFXVirtualCanvas::drawEllipse` / `fillEllipse` | Supported / Partial | basic ellipse forwarded; arc/sector APIs need verification. |
+| `drawBezier` | not present on Canvas | Not supported | Bezier APIs exist in LGFX but not forwarded by Canvas (candidate for future work). |
+| wide/AA line APIs (`drawWideLine` / `drawWedgeLine` / `drawSmoothLine` / `drawSpot`) | - | Not supported / future | AA and wide-line semantics interact with tile boundaries — design work required. |
+| gradient APIs (`drawGradientLine` / `drawGradientHLine` / `drawGradientVLine` / `fillGradientRect`) | - | Not implemented | Color-interpolation APIs are many; prioritize as needed. |
+| basic image push (`pushImage` overloads) | `LGFXVirtualCanvas::pushImage` | Supported (experimentally) | transparency and palette variants work; tile-boundary cases handled by sprite clip (§9.2). |
+| advanced image transforms (`pushImageRotateZoom` / `pushImageRotateZoomWithAA` / `pushImageAffine` / `pushImageAffineWithAA`) | - | Not supported / future | Many overloads and AA/palette cases — revalidation under tiling required. |
+| grayscale / alpha image (`pushGrayscaleImage` / `pushAlphaImage`) | partial | Partial | LGFX provides alpha/grayscale helpers; Canvas needs verification for correct blending across tiles. |
+| low-level pixel transfer (`writePixels` / `writePixelsDMA` / `pushPixels` / `pushPixelsDMA` / `pushBlock`) | - | Not supported | Low-level block writes are not exposed on Canvas; can be added if needed. |
+| readback (`readPixel`, `readRect`, `readRectRGB`) | - | Not supported | Read semantics in tiled mode need specification before implementation. |
+| scroll / copy (`scroll`, `copyRect`) | - | Not supported | Requires semantics definition for tiled surfaces. |
+| text stack (`setCursor`, `getCursorX/Y`, `setTextColor`, `setTextSize`, `setTextDatum`, `setFont`, `setTextFont`, `drawString`, `drawChar`, `drawNumber`, `drawFloat`, `print`, `println`, `printf`) | forwarded on Canvas | Supported | `setCursor` subtracts `offsetY`; `getCursorY()` returns virtual coordinate. print/println/printf forwarded to `_tile`. |
+| font metrics (`fontHeight`, `fontWidth`, `textWidth`, `textLength`) | indirect / delegated | Partial | Some metrics available via delegated font calls; verify for all overloads. |
+| image file draw (`drawBmp` / `drawJpg` / `drawPng` / `drawQoi` / drawImg generator) | partial | Partial | LGFX generator functions exist; calling them per-tile may re-decode each tile — pre-decode or single-shot rendering recommended. |
+| createPng / releasePngMemory | - | Not implemented | Output helpers can be added at manager level if required. |
+| window / clip (`setWindow`, `setClipRect`, `getClipRect`, `clearClipRect`, `setScrollRect`, `getScrollRect`, `clearScrollRect`) | managed by `LGFXVirtualTiledBase` | Supported (manager-side) | renderRegion sets panel clip for target rectangle. |
+| transfer / DMA control (`startWrite`, `endWrite`, `beginTransaction`, `endTransaction`, `waitDMA`, `initDMA`) | managed by `LGFXVirtualTiledBase` / panel | Supported (manager-side) | renderRegion wraps the tile loop in a single startWrite/endWrite and handles waitDMA for single-buffer mode. |
+| management (`setMemoryLimit`, `setSplitCount`, `setTileHeight`, `setBackgroundColor`, `setAutoClear`, `setDoubleBuffer`, `doubleBuffer`, `isReady`, `tileCount`, `tileHeight`) | `LGFXVirtualTiledBase` / `LGFXVirtualScreen` / `LGFXVirtualSprite` | Supported | tile allocation, split resolution and auto-clear/double-buffer policies are implemented here. |
 
 Notes:
-- `Supported` indicates the feature is implemented in `src/LGFXVirtualCanvas.h` and exercised by tests; `Not supported` means it is not implemented; `Partially` or `Supported (with caveats)` indicate implemented but requiring edge-case testing or known limitations.
-- LovyanGFX offers many templated/overloaded drawing APIs; a complete 1:1 mapping is non-trivial. Priorities for future work: (1) advanced image transforms (`pushImageRotateZoom`, `pushImageAffine`), (2) readback APIs, (3) low-level blocking pixel-write APIs as needed.
-- If you want, I can export this table as CSV, create GitHub Issues for each `Not supported` item with suggested priority, or add an explicit implementation plan per item.
-
+- `Supported` marks implemented APIs in `src/LGFXVirtualCanvas.h`; `Not supported` means no forwarding/implementation yet; `Partial` or `Supported (with caveats)` indicate implemented but requiring additional testing or with known limitations.
+- LovyanGFX exposes many template/overload combinations; a full 1:1 mapping is large. Recommended next steps:
+    1. auto-extract public LovyanGFX drawing APIs to CSV (names/signatures/overload counts),
+    2. auto-extract implemented Canvas methods and produce a diff CSV,
+    3. create Issues / task list for `Not supported` items (suggest priorities such as high: `pushImageRotateZoom`/`pushImageAffine`/`readRect`).

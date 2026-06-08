@@ -591,27 +591,38 @@ LGFXVirtualCanvas の上に以下を追加できる設計にする。
 
 以下は LovyanGFX 側（`LGFXBase` / `LGFX_Sprite` 等）の主要 API と、`LGFXVirtualCanvas` 側での対応状況を表形式で示したものです。
 
+
 | LovyanGFX API (代表) | `LGFXVirtualCanvas` / 管理側 マッピング | 対応 | 備考 |
 |---|---:|:--:|---|
 | `fillScreen(color)` | `LGFXVirtualCanvas::fillScreen` | 対応 | tile 全体を塗り、offset 非依存 |
 | `drawPixel(x,y, color)` | `LGFXVirtualCanvas::drawPixel` | 対応 | 内部で `y -= offsetY` して `_tile.drawPixel` に転送 |
 | `drawFastHLine` / `drawFastVLine` | `LGFXVirtualCanvas::drawFastHLine` / `drawFastVLine` | 対応 | `y` を調整して `_tile` に転送 |
-| `drawLine` / `drawTriangle` / `fillTriangle` | 対応 | 対応 | 同名メソッドをフォワード（`y` を差し引く） |
-| `fillRect` / `drawRect` | 対応 | 対応 | 同名メソッド（`y` 補正） |
-| `fillRoundRect` / `drawRoundRect` | 対応 | 対応 | 同名メソッド（`y` 補正） |
-| `drawCircle` / `fillCircle` | 対応 | 対応 | 同名メソッド（`y` 補正） |
-| `drawEllipse` / `fillEllipse` | 対応 | 対応 | 同名メソッド（`y` 補正） |
-| `drawTriangle` / `fillTriangle` | 対応 | 対応 | 同名メソッド（`y` 補正） |
-| `drawString` 系（`const char*`/`String`, フォント指定） | `LGFXVirtualCanvas::drawString` / `drawCentreString` / `drawRightString` | 対応 | `y` 補正。フォント引数（`uint8_t` / `IFont*`）も透過転送 |
-| テキスト設定 (`setCursor` / `getCursorX/Y` / `setTextColor` / `setTextSize` / `setTextDatum` / `setFont` / `setTextFont`) | `LGFXVirtualCanvas` の同名メソッド | 対応（注意あり） | `setCursor(x,y)` は `y -= offsetY`、`getCursorY()` は `+ offsetY` で仮想座標を返す。スクロール等 tile 高依存の挙動は要注意（§9.1） |
-| `print` / `println` / `printf` | `LGFXVirtualCanvas::print` / `println` / `printf` | 対応 | Arduino `Print` オーバーロードを `_tile` に転送 |
-| `pushImage(...)`（各種 overload / 透過 / パレット） | `LGFXVirtualCanvas::pushImage` | 対応（実験済） | `y` 補正。sprite の per-pixel clip によりタイル境界跨ぎも再現（§9.2） |
-| 画像変換・回転・拡大（`pushImageRotateZoom` / `pushImageAffine` 等） | - | 未対応 / 将来要検討 | 既存 API は多岐。タイル化での再検証が必要（透過・パレット・AA 等） |
-| 低レベル転送 / DMA / クリップ (`startWrite` / `endWrite` / `waitDMA` / `setClipRect`) | `LGFXVirtualTiledBase::renderRegion` が制御 | 対応（管理側） | 描画ループ全体を `startWrite`/`setClipRect` で囲み、単一/ダブルバッファの wait 制御を行う |
-| `writePixels` / `pushPixels` / `writeFillRectPreclipped` 等の低レベルブロッキング API | - | 未対応 / 管理側で代替 | これらは直接 `LGFXVirtualCanvas` に実装されていない。必要なら将来追加検討 |
-| 読み取り系 (`readPixel` / `readRect`) | - | 未対応 | `LGFXVirtualCanvas` は描画向けラッパで、読み取りは未実装（将来検討） |
-| 設定系（`setMemoryLimit` / `setSplitCount` / `setTileHeight` / `setBackgroundColor` / `setAutoClear` / `setDoubleBuffer` / `isReady` / `tileCount` / `tileHeight`） | `LGFXVirtualTiledBase`（管理側） | 対応 | タイル分割・確保・auto-clear 等の責務を持つ |
+| `drawLine` / `drawTriangle` / `fillTriangle` | `LGFXVirtualCanvas::drawLine` / `drawTriangle` / `fillTriangle` | 対応 | 同名メソッドをフォワード（`y` を差し引く） |
+| `fillRect` / `drawRect` / `writeFillRectPreclipped` | `LGFXVirtualCanvas::fillRect` / `drawRect` | 対応 / 未対応 | `fillRect`/`drawRect` は対応。低レベルの `writeFillRectPreclipped` は未提供（必要なら追加検討）。 |
+| `fillRoundRect` / `drawRoundRect` | `LGFXVirtualCanvas::fillRoundRect` / `drawRoundRect` | 対応 | 同名メソッド（`y` 補正） |
+| `drawCircle` / `fillCircle` / `drawCircleHelper` / `fillCircleHelper` | `LGFXVirtualCanvas::drawCircle` / `fillCircle` | 対応 / 部分対応 | 基本円は対応。`drawCircleHelper` 等のユーティリティは未明示（必要なら追記）。 |
+| `drawEllipse` / `fillEllipse` / `drawEllipseArc` / `fillEllipseArc` | `LGFXVirtualCanvas::drawEllipse` / `fillEllipse` | 対応 / 部分対応 | 基本楕円は対応。扇形/アーク系は実装未確認 → 部分対応として要検証。 |
+| `drawBezier` | `LGFXVirtualCanvas` 未定義 | 未対応 | Bezier 系は LGFX に存在するが Canvas 側で未定義（将来追加候補）。 |
+| 線幅・アンチエイリアス系 (`drawWideLine` / `drawWedgeLine` / `drawSmoothLine` / `drawSpot`) | - | 未対応 / 将来検討 | AA/ワイドラインはタイル境界や近傍依存で注意が必要。 |
+| グラデーション系 (`drawGradientLine` / `drawGradientHLine` / `drawGradientVLine` / `fillGradientRect`) | - | 未実装 / 将来検討 | 色補間周りは実装が多岐にわたるため優先度検討が必要。 |
+| 画像描画（`pushImage` 基本） | `LGFXVirtualCanvas::pushImage` | 対応（実験済） | 透過・パレット付き基本 pushImage は動作確認済み。タイル境界跨ぎは sprite clip で再現される（§9.2）。 |
+| 画像変換（`pushImageRotateZoom` / `pushImageRotateZoomWithAA` / `pushImageAffine` / `pushImageAffineWithAA`） | - | 未対応 / 将来検討 | 多数のオーバーロード・AA・パレットがあり、タイル化での再検証が必要。 |
+| グレースケール・アルファ画像系 (`pushGrayscaleImage` / `pushAlphaImage`) | - / 部分的に対応 | 部分対応 | `pushAlphaImage` は LGFX 側に実装があり Tile 側での透過処理は要検証。`
+| 低レベルピクセル転送 (`writePixels` / `writePixelsDMA` / `pushPixels` / `pushPixelsDMA` / `pushBlock`) | - | 未対応 | これらは直接 Canvas に実装されていない。管理側で代替するか将来追加検討。 |
+| 読み取り系 (`readPixel` / `readRect` / `readRectRGB`) | - | 未対応 | タイル化下での readback semantics が未定義。実装前に設計が要る。 |
+| スクロール・コピー (`scroll` / `copyRect`) | - | 未対応 | 画面全体や部分コピーの semantics を設計する必要あり。 |
+| テキスト系（`setCursor` / `getCursorX/Y` / `setTextColor` / `setTextSize` / `setTextDatum` / `setFont` / `setTextFont` / `drawString` / `drawChar` / `drawNumber` / `drawFloat` / `print` / `println` / `printf`） | `LGFXVirtualCanvas` の同名メソッド | 対応 | `setCursor` は `y -= offsetY`、`getCursorY()` は `+ offsetY` を返す。print 系は `_tile` へ透過転送。 |
+| フォント・メトリクス系（`fontHeight` / `fontWidth` / `textWidth` / `textLength`） | - / 間接対応 | 部分対応 | これらは virtual 座標系で利用可能だが一部は `_tile` に委譲される。 |
+| 画像ファイル描画（`drawBmp` / `drawJpg` / `drawPng` / `drawQoi` / `drawImg` generator） | - | 部分対応 | `LGFXBase` 側に generator マクロがあり、Canvas 側から直接呼べるが、タイル内での再デコードが発生するので事前デコード等のワークフローを推奨。 |
+| PNG 作成 / 破棄 (`createPng` / `releasePngMemory`) | - | 未対応 / 将来 | 出力系は管理側の追加機能として検討可能。 |
+| 低レベルクリップ / ウィンドウ (`setWindow` / `setClipRect` / `getClipRect` / `clearClipRect` / `setScrollRect` / `getScrollRect` / `clearScrollRect`) | `LGFXVirtualTiledBase` が管理 | 対応（管理側） | renderRegion が `setClipRect` を使ってパネル側クリップを整える。 |
+| 転送制御 / DMA (`startWrite` / `endWrite` / `beginTransaction` / `endTransaction` / `waitDMA` / `initDMA`) | `LGFXVirtualTiledBase::renderRegion` / パネル委譲 | 対応（管理側） | renderRegion は描画ループを1回の startWrite/endWrite にまとめる。 |
+| 設定系（`setMemoryLimit` / `setSplitCount` / `setTileHeight` / `setBackgroundColor` / `setAutoClear` / `setDoubleBuffer` / `doubleBuffer` / `isReady` / `tileCount` / `tileHeight`） | `LGFXVirtualTiledBase`（管理側） | 対応 | タイル解決・確保・auto-clear 等の責務を持つ |
 
 注記：
-- `対応` は現状の `src/LGFXVirtualCanvas.h` と実装ノート（SPEC）に基づく簡易判定です。`対応` は実装済み、`部分対応` は仕様レベルで対応しているが追加テストや edge-case の検証が必要、`未対応` は未実装を示します。
-- LovyanGFX の多くの描画 API はテンプレートやオーバーロードが多く、完全な 1:1 マッピングは簡単ではありません。特に画像変換・回転・AA・パレット周りはケースが多いので、今後の優先度として `pushImage`（既に優先で実装済）に次いで `pushImageRotateZoom` / `pushImageAffine` / 読み取り系 を検討することを推奨します。
+- `対応` は現状の `src/LGFXVirtualCanvas.h` の実装とライブラリ設計に基づく簡易判定です。`部分対応` は実装の有無やエッジケース検証の不足を示します。完全な 1:1 マッピングはテンプレート/オーバーロードの組合せで膨大になるため、まずは上位カテゴリ（図形・ライン・テキスト・基本画像 push / 高度な画像変換 / 読み取り / 低レベル転送）ごとに優先度を決め、逐次追加実装／テストするのが現実的です。
+- 次の推奨作業：
+    1. `LGFXBase` の public 描画 API を自動抽出して CSV 化（メソッド名・シグネチャ・オーバーロード数）。
+    2. `LGFXVirtualCanvas.h` で実装済みメソッドを同様に抽出し、自動で差分表（CSV）を生成。
+    3. 未対応項目を Issue/タスク化して優先度を付ける（例：`pushImageRotateZoom` / `pushImageAffine` / `readRect` を高優先度）。
+    4. 実装方針を分割（単純 forward・部分実装・設計検討要）して着手。
