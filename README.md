@@ -225,6 +225,20 @@ maps your full-screen (virtual) coordinates onto the current tile. Supported:
 Calling a method that is not (yet) wrapped is a compile error — by design, so
 unsupported drawing fails loudly rather than silently.
 
+### Detecting availability
+
+Including `LGFXVirtualCanvas.h` defines `LGFXVIRTUALCANVAS_H`, so other code or
+libraries can detect it and integrate optionally:
+
+```cpp
+#if defined(LGFXVIRTUALCANVAS_H)
+    // LGFXVirtualCanvas is available — LGFXVIRTUALCANVAS_VERSION_STR etc. are too
+#endif
+```
+
+The header also pulls in `LGFXVIRTUALCANVAS_VERSION_MAJOR` / `_MINOR` / `_PATCH`
+/ `_STR` for version checks.
+
 ## How it works
 
 LovyanGFX has no drawing-origin translation and its primitives are

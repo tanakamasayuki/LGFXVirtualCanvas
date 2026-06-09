@@ -25,9 +25,19 @@
 /// an ::LGFXVirtualCanvas; only the transfer target (full panel vs a placed
 /// rectangle) differs.
 
+/// @def LGFXVIRTUALCANVAS_H
+/// @brief Presence guard. Other code / libraries can test
+///        `#if defined(LGFXVIRTUALCANVAS_H)` to detect that this header has been
+///        included (e.g. to optionally integrate when it is available). The
+///        `LGFXVIRTUALCANVAS_VERSION_*` macros (from lgfxvirtualcanvas_version.h,
+///        included below) are also available for version checks.
+#define LGFXVIRTUALCANVAS_H
+
 #include <cstdarg>
 #include <cstdio>
 #include <cstdint>
+
+#include "lgfxvirtualcanvas_version.h"
 
 /// @brief The drawing surface handed to your draw function.
 ///
