@@ -210,7 +210,15 @@ top-left), and `g.width()/g.height()` return the sprite size.
 ### `LGFXVirtualCanvas` — the drawing surface
 
 Passed to your draw function. It looks like a normal LGFX/M5GFX canvas but
-maps your full-screen (virtual) coordinates onto the current tile. Supported:
+maps your full-screen (virtual) coordinates onto the current tile.
+
+The current release wraps the LovyanGFX/M5GFX APIs that can be provided safely
+from a tiled virtual surface: coordinate-bearing drawing, text, image decode /
+push helpers, color/state utilities, and readback from the current tile. APIs
+that rely on stream cursors, caller-managed windows, cross-tile pixel movement,
+or sprite-to-destination transfer are intentionally left out and listed below.
+
+Supported:
 
 - Geometry: `width()`, `height()` (the full virtual screen)
 - Color utilities: `color332`, `color565`, `color888`, `swap565`,
@@ -248,8 +256,8 @@ maps your full-screen (virtual) coordinates onto the current tile. Supported:
   `drawCenterString`, `drawRightString`, `drawNumber`, `drawFloat`,
   `drawChar`, `print`, `println`, `write`, `printf`, `vprintf`
 
-Calling a method that is not (yet) wrapped is a compile error — by design, so
-unsupported drawing fails loudly rather than silently.
+Calling a method that is not wrapped is a compile error — by design, so
+unsupported or unsafe drawing paths fail loudly rather than silently.
 
 Not adopted function groups:
 

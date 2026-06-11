@@ -590,6 +590,10 @@ LGFXVirtualCanvas の上に以下を追加できる設計にする。
 ## 付録: LGFXBase と `LGFXVirtualCanvas` の対応表（表形式）
 
 以下は LovyanGFX 側（`LGFXBase` / `LGFX_Sprite` 等）の主要 API と、`LGFXVirtualCanvas` 側での対応状況を表形式で示したものです。
+このリリース時点で、タイル化された仮想 surface から安全に提供できる wrapper は
+一通り対応済みとして扱います。具体的には、座標付き draw/write API、テキスト、
+画像 decode / push helper、色・状態 helper、tile 内読み戻しです。除外している
+関数群は単なる backlog ではなく、設計上そのまま公開しないものです。
 
 
 | LovyanGFX API 群 | `LGFXVirtualCanvas` / 管理側 マッピング | 対応 | 備考 |
@@ -635,7 +639,3 @@ LGFXVirtualCanvas の上に以下を追加できる設計にする。
 
 注記：
 - `対応` は現状の `src/LGFXVirtualCanvas.h` の実装とライブラリ設計に基づく判定です。上記の「採用しない関数群」は単なる実装漏れではなく、タイル化された仮想 surface にそのまま公開すると意味や安全性が崩れるため、対応一覧から意図的に外しています。
-- 次の推奨作業：
-    1. `LGFXBase` の public 描画 API を自動抽出して CSV 化（メソッド名・シグネチャ・オーバーロード数）。
-    2. `LGFXVirtualCanvas.h` で実装済みメソッドを同様に抽出し、自動で差分表（CSV）を生成。
-    3. 新しく見つかった差分を、採用しない関数群に該当するか確認してから wrapper 追加を判断する。

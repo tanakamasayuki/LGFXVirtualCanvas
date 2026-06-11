@@ -590,6 +590,10 @@ The minimum viable version satisfies:
 ## Appendix: LGFXBase → `LGFXVirtualCanvas` mapping (table)
 
 The table below maps representative LovyanGFX APIs (`LGFXBase` / `LGFX_Sprite`) to where they are handled in this library and the current support status.
+As of this release, wrappers that are safe to provide from a tiled virtual
+surface are considered covered: coordinate-bearing draw/write APIs, text,
+image decode / push helpers, color/state helpers, and tile-local readback.
+Omitted groups are design exclusions, not ordinary backlog items.
 
 | LovyanGFX API group | `LGFXVirtualCanvas` / manager mapping | Support | Notes |
 |---|---:|:--:|---|
@@ -638,7 +642,4 @@ Notes:
 - `Supported` marks implemented APIs in `src/LGFXVirtualCanvas.h`. The "not
   adopted" groups above are intentionally omitted from the supported mapping,
   not simply forgotten.
-- LovyanGFX exposes many template/overload combinations; a full 1:1 mapping is large. Recommended next steps:
-    1. auto-extract public LovyanGFX drawing APIs to CSV (names/signatures/overload counts),
-    2. auto-extract implemented Canvas methods and produce a diff CSV,
-    3. review newly found gaps against the not-adopted groups before adding wrappers.
+- LovyanGFX exposes many template/overload combinations; a full 1:1 mapping is large.

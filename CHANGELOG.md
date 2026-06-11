@@ -1,6 +1,14 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Expand `LGFXVirtualCanvas` API coverage to the set of LovyanGFX/M5GFX wrappers that can be safely provided on a tiled virtual surface: current-color drawing overloads, Bezier/arc/helper shapes, gradients, smooth/wide/spot drawing, bitmap and decoded image helpers, QR code rendering, grayscale/alpha image helpers, image rotate/zoom helpers, readback, palette/state utilities, pivot/gradient helpers, and extended text/font APIs.
+- (JA) タイル化された仮想 surface 上で安全に提供できる LovyanGFX/M5GFX ラッパーを一通り追加：current color 描画 overload、Bezier/arc/helper 図形、gradient、smooth/wide/spot 描画、bitmap と decode 画像 helper、QR code、grayscale/alpha 画像 helper、画像 rotate/zoom helper、読み戻し、palette/state ユーティリティ、pivot/gradient helper、text/font API 拡張。
+- (EN) Add coordinate-bearing `write*` compatibility wrappers (`writePixel`, `writeFastHLine`, `writeFastVLine`, `writeFillRect`, `writeFillRectPreclipped`). `writeFillRectPreclipped` intentionally routes through clipped `fillRect` semantics instead of trusting caller-side preclip.
+- (JA) 座標付き `write*` 互換ラッパー（`writePixel`, `writeFastHLine`, `writeFastVLine`, `writeFillRect`, `writeFillRectPreclipped`）を追加。`writeFillRectPreclipped` は caller 側の preclip を信用せず、clip される `fillRect` 相当として扱う。
+- (EN) Document not-adopted API groups and why they are excluded: stream-cursor writes, caller-managed window/transaction controls, scroll/copy, sprite transfer helpers, affine image helpers, and tile-local PNG export helpers.
+- (JA) 採用しない API 群と理由を明文化：stream cursor 依存 write、呼び出し側管理の window/transaction 制御、scroll/copy、sprite 転送 helper、affine 画像 helper、tile 単体 PNG export helper。
+- (EN) Extend the shared build/parity scene to cover representative wrappers across LovyanGFX, M5GFX, and M5Unified builds.
+- (JA) LovyanGFX / M5GFX / M5Unified の build/parity 用共通シーンに代表 wrapper のカバレッジを追加。
 
 ## 1.0.2
 - (EN) Define `LGFXVIRTUALCANVAS_H` on include so other code/libraries can detect the library with `#if defined(LGFXVIRTUALCANVAS_H)`; the header now also pulls in the `LGFXVIRTUALCANVAS_VERSION_*` macros.
