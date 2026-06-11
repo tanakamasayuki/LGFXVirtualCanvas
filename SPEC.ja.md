@@ -597,7 +597,7 @@ LGFXVirtualCanvas の上に以下を追加できる設計にする。
 | ジオメトリ（`width`, `height`） | `LGFXVirtualCanvas` | 対応 | 仮想 surface 全体のサイズを返す |
 | 色ユーティリティ（`color332`, `color565`, `color888`, `swap565`, `swap888`, 変換系） | `LGFXVirtualCanvas` static helper | 対応 | LGFX 互換の色変換 helper へ転送 |
 | 状態 / palette / pivot / gradient helper | `LGFXVirtualCanvas` | 対応 | 状態は現在の tile sprite が持つ。pivot Y は仮想座標へ変換 |
-| 基本図形・拡張図形 | `LGFXVirtualCanvas` | 対応 | public wrapper は必要な箇所で仮想 Y を tile Y に補正 |
+| 基本図形・拡張図形・座標付き `write*` 描画 | `LGFXVirtualCanvas` | 対応 | public wrapper は必要な箇所で仮想 Y を tile Y に補正 |
 | gradient / smooth / wide / spot 描画 | `LGFXVirtualCanvas` | 対応 | sprite clip で tile 外を捨てる。代表ケースは parity test で確認 |
 | 画像 push / decode / QR / grayscale / alpha | `LGFXVirtualCanvas` | 対応 | decode helper は使えるが、高コストな decode は原則 callback 外で行うことを推奨 |
 | 読み戻し（`readPixel`, `readPixelRGB`, `readPixelValue`, `readRectRGB`, `readRect`） | `LGFXVirtualCanvas` | 対応 | 仮想 Y を tile Y に補正して現在 tile から読む |
@@ -607,12 +607,13 @@ LGFXVirtualCanvas の上に以下を追加できる設計にする。
 
 採用しない関数群：
 
-- 低レベルのストリーミング描画（`writePixel`, `writeFastHLine`,
-  `writeFastVLine`, `writeFillRect`, `writeFillRectPreclipped`,
-  `writeColor`, `pushBlock`, `writePixels`, `writePixelsDMA`, `pushPixels`,
+- 低レベルのストリーミング描画（`writeFillRectPreclipped`, `writeColor`,
+  `pushBlock`, `writePixels`, `writePixelsDMA`, `pushPixels`,
   `pushPixelsDMA`, `pushColor`, `pushColors`）は、呼び出し側が管理する
   write window / stream cursor に依存し、安全な tile 単位クリップに必要な
-  仮想座標情報を十分に持たない。
+  仮想座標情報を十分に持たない。`writePixel`, `writeFastHLine`,
+  `writeFastVLine`, `writeFillRect` のような座標付き write API は、仮想 Y を
+  安全に変換できるため対応する。
 - window / clip / transaction 制御（`setWindow`, `startWrite`, `endWrite`,
   `beginTransaction`, `endTransaction`, `initDMA`, `waitDMA`）は tiled manager
   が所有する。callback canvas に公開すると、管理側の clip と DMA 順序保証を

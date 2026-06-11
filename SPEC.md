@@ -596,7 +596,7 @@ The table below maps representative LovyanGFX APIs (`LGFXBase` / `LGFX_Sprite`) 
 | geometry (`width`, `height`) | `LGFXVirtualCanvas` | Supported | returns the full virtual surface size |
 | color utilities (`color332`, `color565`, `color888`, `swap565`, `swap888`, conversions) | `LGFXVirtualCanvas` static helpers | Supported | forwards to LGFX-compatible conversion helpers |
 | state / palette / pivot / gradient helpers | `LGFXVirtualCanvas` | Supported | state is held by the current tile sprite; pivot Y is converted to/from virtual coordinates |
-| basic and advanced shapes | `LGFXVirtualCanvas` | Supported | all public wrappers apply virtual-to-tile Y correction where needed |
+| basic and advanced shapes, coordinate-bearing `write*` drawing | `LGFXVirtualCanvas` | Supported | all public wrappers apply virtual-to-tile Y correction where needed |
 | gradient, smooth, wide, and spot drawing | `LGFXVirtualCanvas` | Supported | tile clipping is handled by the sprite; parity tests cover representative cases |
 | image push / decode / QR / grayscale / alpha | `LGFXVirtualCanvas` | Supported | decode helpers are available, but expensive decodes should generally be done outside the per-tile callback |
 | readback (`readPixel`, `readPixelRGB`, `readPixelValue`, `readRectRGB`, `readRect`) | `LGFXVirtualCanvas` | Supported | reads from the current tile after virtual-to-tile Y correction |
@@ -606,11 +606,13 @@ The table below maps representative LovyanGFX APIs (`LGFXBase` / `LGFX_Sprite`) 
 
 Not adopted function groups:
 
-- Low-level streaming writes (`writePixel`, `writeFastHLine`, `writeFastVLine`,
-  `writeFillRect`, `writeFillRectPreclipped`, `writeColor`, `pushBlock`,
-  `writePixels`, `writePixelsDMA`, `pushPixels`, `pushPixelsDMA`, `pushColor`,
-  `pushColors`) depend on a caller-managed write window / stream cursor and do
-  not carry enough virtual coordinate information for safe per-tile clipping.
+- Low-level streaming writes (`writeFillRectPreclipped`, `writeColor`,
+  `pushBlock`, `writePixels`, `writePixelsDMA`, `pushPixels`,
+  `pushPixelsDMA`, `pushColor`, `pushColors`) depend on a caller-managed write
+  window / stream cursor and do not carry enough virtual coordinate information
+  for safe per-tile clipping. Coordinate-bearing write APIs such as
+  `writePixel`, `writeFastHLine`, `writeFastVLine`, and `writeFillRect` are
+  supported because their virtual Y coordinate can be translated safely.
 - Window, clip, and transaction controls (`setWindow`, `startWrite`,
   `endWrite`, `beginTransaction`, `endTransaction`, `initDMA`, `waitDMA`) are
   owned by the tiled manager. Exposing them on the callback canvas would allow

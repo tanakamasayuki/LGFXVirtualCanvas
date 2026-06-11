@@ -220,7 +220,8 @@ maps your full-screen (virtual) coordinates onto the current tile. Supported:
   `getPalette`, `setPaletteColor`, `setPivot`, `getPivotX/Y`, `createGradient`,
   `mapGradient`
 - Shapes: `fillScreen`, `drawPixel`, `drawLine`, `drawFastHLine`,
-  `drawFastVLine`, `fillRect`, `drawRect`, `fillRoundRect`,
+  `drawFastVLine`, `writePixel`, `writeFastHLine`, `writeFastVLine`,
+  `fillRect`, `writeFillRect`, `drawRect`, `fillRoundRect`,
   `drawRoundRect`, `drawCircle`, `fillCircle`, `drawEllipse`,
   `fillEllipse`, `drawTriangle`, `fillTriangle`, `drawBezier`,
   `drawEllipseArc`, `fillEllipseArc`, `drawArc`, `fillArc`, `clear`,
@@ -251,10 +252,9 @@ unsupported drawing fails loudly rather than silently.
 
 Not adopted function groups:
 
-- Low-level streaming writes: `writePixel`, `writeFastHLine`,
-  `writeFastVLine`, `writeFillRect`, `writeFillRectPreclipped`,
-  `writeColor`, `pushBlock`, `writePixels`, `writePixelsDMA`,
-  `pushPixels`, `pushPixelsDMA`, `pushColor`, `pushColors`.
+- Low-level streaming writes: `writeFillRectPreclipped`, `writeColor`,
+  `pushBlock`, `writePixels`, `writePixelsDMA`, `pushPixels`,
+  `pushPixelsDMA`, `pushColor`, `pushColors`.
   These APIs depend on the caller-managed write window / stream cursor and do
   not carry enough virtual coordinate information for safe per-tile clipping.
 - Window, clip, and transaction controls: `setWindow`, `startWrite`,

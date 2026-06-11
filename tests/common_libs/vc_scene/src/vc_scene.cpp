@@ -65,7 +65,9 @@ void drawVcScene(LGFXVirtualCanvas &g)
     (void)LGFXVirtualCanvas::color565(255, 0, 0);
     g.drawRect(0, 0, W, H, TFT_WHITE);
     g.drawRect(2, 2, W - 4, H - 4);
+    g.writePixel(4, 4, TFT_WHITE);
     g.fillRect(W / 4, H / 4, W / 2, H / 2, TFT_RED);
+    g.writeFillRect(W / 4 + 2, H / 4 + 2, 6, 4, TFT_BLACK);
     g.fillRectAlpha(W / 4 + 8, H / 4 + 8, 28, 18, 96, TFT_WHITE);
     g.fillCircle(W / 2, H / 2, s / 6, TFT_YELLOW);
     g.drawCircle(W / 2, H / 2, s / 5, TFT_GREEN);
@@ -73,6 +75,8 @@ void drawVcScene(LGFXVirtualCanvas &g)
     g.drawLine(0, H, W, 0, TFT_MAGENTA);
     g.drawFastHLine(0, H / 2, W, TFT_ORANGE);
     g.drawFastVLine(W / 2, 0, H, TFT_BLUE);
+    g.writeFastHLine(4, H / 2 - 4, 18, TFT_WHITE);
+    g.writeFastVLine(W / 2 + 4, 4, 18, TFT_WHITE);
     g.drawBezier(8, H - 30, W / 3, H - 70, W - 8, H - 30, TFT_GREEN);
     g.drawArc(W - 42, 42, 22, 14, 30, 300, TFT_YELLOW);
     g.fillArc(W - 42, 42, 12, 6, 210, 330, TFT_CYAN);

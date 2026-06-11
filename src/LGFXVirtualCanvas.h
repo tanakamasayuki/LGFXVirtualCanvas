@@ -133,6 +133,11 @@ public:
     void drawPixel(int32_t x, int32_t y, const T &color) { _tile.drawPixel(x, y - _offsetY, color); }
     /// @brief Draw a single pixel with the current drawing color.
     void drawPixel(int32_t x, int32_t y) { _tile.drawPixel(x, y - _offsetY); }
+    /// @brief Write a single pixel at virtual (@p x, @p y) with the current drawing color.
+    void writePixel(int32_t x, int32_t y) { _tile.writePixel(x, y - _offsetY); }
+    /// @brief Write a single pixel at virtual (@p x, @p y).
+    template <typename T>
+    void writePixel(int32_t x, int32_t y, const T &color) { _tile.writePixel(x, y - _offsetY, color); }
     /// @brief Read a pixel from virtual (@p x, @p y) as RGB565 from the current tile.
     uint16_t readPixel(int32_t x, int32_t y) { return _tile.readPixel(x, y - _offsetY); }
     /// @brief Read a pixel from virtual (@p x, @p y) as an RGB color object from the current tile.
@@ -150,12 +155,22 @@ public:
     void drawFastHLine(int32_t x, int32_t y, int32_t w, const T &color) { _tile.drawFastHLine(x, y - _offsetY, w, color); }
     /// @brief Draw a horizontal line with the current drawing color.
     void drawFastHLine(int32_t x, int32_t y, int32_t w) { _tile.drawFastHLine(x, y - _offsetY, w); }
+    /// @brief Write a horizontal line with the current drawing color.
+    void writeFastHLine(int32_t x, int32_t y, int32_t w) { _tile.writeFastHLine(x, y - _offsetY, w); }
+    /// @brief Write a horizontal line.
+    template <typename T>
+    void writeFastHLine(int32_t x, int32_t y, int32_t w, const T &color) { _tile.writeFastHLine(x, y - _offsetY, w, color); }
 
     /// @brief Draw a vertical line of height @p h from virtual (@p x, @p y).
     template <typename T>
     void drawFastVLine(int32_t x, int32_t y, int32_t h, const T &color) { _tile.drawFastVLine(x, y - _offsetY, h, color); }
     /// @brief Draw a vertical line with the current drawing color.
     void drawFastVLine(int32_t x, int32_t y, int32_t h) { _tile.drawFastVLine(x, y - _offsetY, h); }
+    /// @brief Write a vertical line with the current drawing color.
+    void writeFastVLine(int32_t x, int32_t y, int32_t h) { _tile.writeFastVLine(x, y - _offsetY, h); }
+    /// @brief Write a vertical line.
+    template <typename T>
+    void writeFastVLine(int32_t x, int32_t y, int32_t h, const T &color) { _tile.writeFastVLine(x, y - _offsetY, h, color); }
 
     /// @brief Draw a line between virtual (@p x0, @p y0) and (@p x1, @p y1).
     template <typename T>
@@ -168,6 +183,11 @@ public:
     void fillRect(int32_t x, int32_t y, int32_t w, int32_t h, const T &color) { _tile.fillRect(x, y - _offsetY, w, h, color); }
     /// @brief Fill a rectangle with the current drawing color.
     void fillRect(int32_t x, int32_t y, int32_t w, int32_t h) { _tile.fillRect(x, y - _offsetY, w, h); }
+    /// @brief Write a filled rectangle with the current drawing color.
+    void writeFillRect(int32_t x, int32_t y, int32_t w, int32_t h) { _tile.writeFillRect(x, y - _offsetY, w, h); }
+    /// @brief Write a filled rectangle.
+    template <typename T>
+    void writeFillRect(int32_t x, int32_t y, int32_t w, int32_t h, const T &color) { _tile.writeFillRect(x, y - _offsetY, w, h, color); }
     /// @brief Fill a rectangle with alpha compositing.
     template <typename T>
     void fillRectAlpha(int32_t x, int32_t y, int32_t w, int32_t h, uint8_t alpha, const T &color) { _tile.fillRectAlpha(x, y - _offsetY, w, h, alpha, color); }
