@@ -217,9 +217,14 @@ maps your full-screen (virtual) coordinates onto the current tile. Supported:
   `drawFastVLine`, `fillRect`, `drawRect`, `fillRoundRect`,
   `drawRoundRect`, `drawCircle`, `fillCircle`, `drawEllipse`,
   `fillEllipse`, `drawTriangle`, `fillTriangle`, `drawBezier`,
-  `drawEllipseArc`, `fillEllipseArc`, `drawArc`, `fillArc`
+  `drawEllipseArc`, `fillEllipseArc`, `drawArc`, `fillArc`,
+  `drawGradientHLine`, `drawGradientVLine`, `drawGradientLine`,
+  `fillGradientRect`, `drawSmoothLine`, `drawWideLine`,
+  `drawWedgeLine`, `drawSpot`, `drawGradientSpot`,
+  `fillSmoothRoundRect`, `fillSmoothCircle`
 - Image: `pushImage`, `drawBitmap`, `drawXBitmap`, `setSwapBytes`,
-  `getSwapBytes`
+  `getSwapBytes`, `drawBmp`, `drawBmpFile`, `drawJpg`, `drawJpgFile`,
+  `drawPng`, `drawPngFile`, `drawQoi`, `drawQoiFile`, `qrcode`
 - Text: `setCursor`, `getCursorX/Y`, `setTextColor`, `setTextSize`,
   `getTextSizeX/Y`, `setTextDatum`, `getTextDatum`, `setTextPadding`,
   `getTextPadding`, `setTextWrap`, `setTextStyle`, `getTextStyle`,
@@ -258,10 +263,13 @@ code path proves correctness. Rationale in [SPEC.md §6](SPEC.md).
 
 - **Vertical tiling only.**
 - **Function pointers only** for the draw callback (no capturing lambdas).
-- **Neighbor-dependent drawing across tile boundaries** (anti-aliasing, blur,
-  neighbor-sampling filters) may not match a full render, because each tile is
-  redrawn and clipped independently. LovyanGFX's default primitives are not
-  anti-aliased, so this is usually a non-issue.
+- **Neighbor-dependent drawing across tile boundaries** (anti-aliasing,
+  smooth/wide lines, blur, neighbor-sampling filters) may not match a full
+  render, because each tile is redrawn and clipped independently. LovyanGFX's
+  default primitives are not anti-aliased, so this is usually a non-issue.
+- Image decoders (`drawBmp` / `drawJpg` / `drawPng` / `drawQoi` and `*File`)
+  are wrapped for coverage, but they run once per tile. For performance, decode
+  once into a sprite/image buffer and use `pushImage` when possible.
 - Text behavior that depends on the buffer height (auto-scroll, bottom-edge
   wrap) is not guaranteed; basic cursor/print/drawString are.
 - No partial-update / retained mode: redraw the whole scene each frame.

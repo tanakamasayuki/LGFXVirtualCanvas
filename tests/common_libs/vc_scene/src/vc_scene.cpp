@@ -52,8 +52,17 @@ void drawVcScene(LGFXVirtualCanvas &g)
     g.drawArc(W - 42, 42, 22, 14, 30, 300, TFT_YELLOW);
     g.fillArc(W - 42, 42, 12, 6, 210, 330, TFT_CYAN);
     g.drawEllipseArc(42, H - 42, 8, 20, 14, 28, 20, 320, TFT_PINK);
+    g.drawGradientLine(4, H / 2 + 8, W - 4, H / 2 + 18, TFT_RED, TFT_BLUE);
+    g.fillGradientRect(8, H / 2 + 24, 42, 16, TFT_GREEN, TFT_BLACK);
+    g.drawSmoothLine(54, H / 2 + 32, W / 2 - 8, H / 2 + 12, TFT_WHITE);
+    g.drawWideLine(W / 2 + 8, H / 2 + 18, W - 54, H / 2 + 32, 2.0f, TFT_ORANGE);
+    g.drawWedgeLine(W / 2 + 8, H / 2 + 38, W - 54, H / 2 + 35, 1.0f, 3.0f, TFT_MAGENTA);
+    g.drawSpot(W - 34, H / 2 + 34, 4.0f, TFT_YELLOW);
+    g.fillSmoothCircle(34, 42, 8, TFT_SKYBLUE);
+    g.fillSmoothRoundRect(50, 34, 28, 18, 5, TFT_DARKCYAN);
     g.drawBitmap(W - 18, H - 18, kBits8x8, 8, 8, TFT_WHITE);
     g.drawXBitmap(W - 30, H - 18, kBits8x8, 8, 8, TFT_GREEN, TFT_BLACK);
+    g.qrcode("VC", W - 36, 6, 24, 1);
 
     g.setTextColor(TFT_WHITE);
     g.setTextSize(1, 1);

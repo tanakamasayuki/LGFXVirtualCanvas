@@ -144,6 +144,52 @@ public:
     template <typename T>
     void fillArc(int32_t x, int32_t y, int32_t r0, int32_t r1, float angle0, float angle1, const T &color) { _tile.fillArc(x, y - _offsetY, r0, r1, angle0, angle1, color); }
 
+    /// @brief Draw a horizontal gradient line from virtual (@p x, @p y).
+    template <typename T>
+    void drawGradientHLine(int32_t x, int32_t y, int32_t w, const T &start, const T &end) { _tile.drawGradientHLine(x, y - _offsetY, w, start, end); }
+    /// @brief Draw a vertical gradient line from virtual (@p x, @p y).
+    template <typename T>
+    void drawGradientVLine(int32_t x, int32_t y, int32_t h, const T &start, const T &end) { _tile.drawGradientVLine(x, y - _offsetY, h, start, end); }
+    /// @brief Draw a gradient line between virtual points.
+    template <typename T>
+    void drawGradientLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, const T &start, const T &end) { _tile.drawGradientLine(x0, y0 - _offsetY, x1, y1 - _offsetY, start, end); }
+    /// @brief Draw a gradient line between virtual points from a LovyanGFX color table.
+    void drawGradientLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, const lgfx::v1::colors_t colors) { _tile.drawGradientLine(x0, y0 - _offsetY, x1, y1 - _offsetY, colors); }
+    /// @brief Draw a horizontal gradient line from a LovyanGFX color table.
+    void drawGradientHLine(int32_t x, int32_t y, uint32_t w, const lgfx::v1::colors_t colors) { _tile.drawGradientHLine(x, y - _offsetY, w, colors); }
+    /// @brief Draw a vertical gradient line from a LovyanGFX color table.
+    void drawGradientVLine(int32_t x, int32_t y, uint32_t h, const lgfx::v1::colors_t colors) { _tile.drawGradientVLine(x, y - _offsetY, h, colors); }
+    /// @brief Fill a rectangle with a gradient.
+    template <typename T>
+    void fillGradientRect(int32_t x, int32_t y, uint32_t w, uint32_t h, const T &start, const T &end, lgfx::v1::gradient_fill_styles::fill_style_t style = lgfx::v1::gradient_fill_styles::RADIAL) { _tile.fillGradientRect(x, y - _offsetY, w, h, start, end, style); }
+    /// @brief Fill a rectangle with a gradient from a LovyanGFX color table.
+    void fillGradientRect(int32_t x, int32_t y, uint32_t w, uint32_t h, const lgfx::v1::colors_t colors, lgfx::v1::gradient_fill_styles::fill_style_t style = lgfx::v1::gradient_fill_styles::RADIAL) { _tile.fillGradientRect(x, y - _offsetY, w, h, colors, style); }
+
+    /// @brief Draw an anti-aliased line between virtual points.
+    template <typename T>
+    void drawSmoothLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, const T &color) { _tile.drawSmoothLine(x0, y0 - _offsetY, x1, y1 - _offsetY, color); }
+    /// @brief Draw a wide line between virtual points.
+    template <typename T>
+    void drawWideLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, float r, const T &color) { _tile.drawWideLine(x0, y0 - _offsetY, x1, y1 - _offsetY, r, color); }
+    /// @brief Draw a gradient wide line between virtual points.
+    void drawWideLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, float r, const lgfx::v1::colors_t colors) { _tile.drawWideLine(x0, y0 - _offsetY, x1, y1 - _offsetY, r, colors); }
+    /// @brief Draw a wedge line between virtual points.
+    template <typename T>
+    void drawWedgeLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, float r0, float r1, const T &color) { _tile.drawWedgeLine(x0, y0 - _offsetY, x1, y1 - _offsetY, r0, r1, color); }
+    /// @brief Draw a gradient wedge line between virtual points.
+    void drawWedgeLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, float r0, float r1, const lgfx::v1::colors_t colors) { _tile.drawWedgeLine(x0, y0 - _offsetY, x1, y1 - _offsetY, r0, r1, colors); }
+    /// @brief Draw a circular spot centered at virtual (@p x, @p y).
+    template <typename T>
+    void drawSpot(int32_t x, int32_t y, float r, const T &color) { _tile.drawSpot(x, y - _offsetY, r, color); }
+    /// @brief Draw a gradient spot centered at virtual (@p x, @p y).
+    void drawGradientSpot(int32_t x, int32_t y, float r, const lgfx::v1::colors_t colors) { _tile.drawGradientSpot(x, y - _offsetY, r, colors); }
+    /// @brief Fill an anti-aliased rounded rectangle.
+    template <typename T>
+    void fillSmoothRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, const T &color) { _tile.fillSmoothRoundRect(x, y - _offsetY, w, h, r, color); }
+    /// @brief Fill an anti-aliased circle centered at virtual (@p x, @p y).
+    template <typename T>
+    void fillSmoothCircle(int32_t x, int32_t y, int32_t r, const T &color) { _tile.fillSmoothCircle(x, y - _offsetY, r, color); }
+
     /// @brief Push a @p w × @p h image to virtual (@p x, @p y).
     /// @note The sprite's per-pixel clip discards rows outside the tile
     ///       (including negative dest Y, where LGFX offsets into the source),
@@ -170,6 +216,59 @@ public:
     bool getSwapBytes(void) const { return _tile.getSwapBytes(); }
     /// @brief Enable/disable 16-bit image data byte swapping for pushImage().
     void setSwapBytes(bool swap) { _tile.setSwapBytes(swap); }
+
+    /// @brief Decode and draw a BMP image from memory at virtual (@p x, @p y).
+    bool drawBmp(const uint8_t *data, uint32_t len, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawBmp(data, len, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    /// @brief Decode and draw a BMP image from a LovyanGFX DataWrapper.
+    bool drawBmp(lgfx::v1::DataWrapper *data, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawBmp(data, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    /// @brief Decode and draw a BMP file from the default filesystem.
+    bool drawBmpFile(const char *path, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawBmpFile(path, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    /// @brief Decode and draw a BMP file from @p fs.
+    template <typename FS>
+    bool drawBmpFile(FS &fs, const char *path, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawBmpFile(fs, path, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+
+    /// @brief Decode and draw a JPEG image from memory at virtual (@p x, @p y).
+    bool drawJpg(const uint8_t *data, uint32_t len, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawJpg(data, len, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    /// @brief Decode and draw a JPEG image from a LovyanGFX DataWrapper.
+    bool drawJpg(lgfx::v1::DataWrapper *data, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawJpg(data, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    /// @brief Decode and draw a JPEG file from the default filesystem.
+    bool drawJpgFile(const char *path, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawJpgFile(path, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    /// @brief Decode and draw a JPEG file from @p fs.
+    template <typename FS>
+    bool drawJpgFile(FS &fs, const char *path, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawJpgFile(fs, path, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+
+    /// @brief Decode and draw a PNG image from memory at virtual (@p x, @p y).
+    bool drawPng(const uint8_t *data, uint32_t len, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawPng(data, len, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    /// @brief Decode and draw a PNG image from a LovyanGFX DataWrapper.
+    bool drawPng(lgfx::v1::DataWrapper *data, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawPng(data, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    /// @brief Decode and draw a PNG file from the default filesystem.
+    bool drawPngFile(const char *path, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawPngFile(path, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    /// @brief Decode and draw a PNG file from @p fs.
+    template <typename FS>
+    bool drawPngFile(FS &fs, const char *path, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawPngFile(fs, path, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+
+    /// @brief Decode and draw a QOI image from memory at virtual (@p x, @p y).
+    bool drawQoi(const uint8_t *data, uint32_t len, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawQoi(data, len, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    /// @brief Decode and draw a QOI image from a LovyanGFX DataWrapper.
+    bool drawQoi(lgfx::v1::DataWrapper *data, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawQoi(data, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    /// @brief Decode and draw a QOI file from the default filesystem.
+    bool drawQoiFile(const char *path, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawQoiFile(path, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    /// @brief Decode and draw a QOI file from @p fs.
+    template <typename FS>
+    bool drawQoiFile(FS &fs, const char *path, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawQoiFile(fs, path, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+
+    /// @brief Generate and draw a QR code at virtual (@p x, @p y).
+    void qrcode(const char *string, int32_t x = -1, int32_t y = -1, int32_t width = -1, uint8_t version = 1, bool margin = false)
+    {
+        const int32_t w = (width < 0) ? ((_tile.width() < _virtualHeight) ? _tile.width() : _virtualHeight) : width;
+        const int32_t vx = (x < 0) ? ((_tile.width() - w) / 2) : x;
+        const int32_t vy = (y < 0) ? ((_virtualHeight - w) / 2) : y;
+        _tile.qrcode(string, vx, vy - _offsetY, w, version, margin);
+    }
+#ifdef ARDUINO
+    /// @brief Generate and draw a QR code from an Arduino String.
+    void qrcode(const String &string, int32_t x = -1, int32_t y = -1, int32_t width = -1, uint8_t version = 1) { qrcode(string.c_str(), x, y, width, version); }
+#endif
 
     /// @brief Set the text cursor to virtual (@p x, @p y).
     /// @note `print`/`println`/`printf` then advance the cursor and reproduce
