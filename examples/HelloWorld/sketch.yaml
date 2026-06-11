@@ -8,3 +8,5 @@ profiles:
       - M5Unified (0.2.17)
       - M5GFX (0.2.22)
       - dir : ../../
+
+default_profile: m5stack_core2

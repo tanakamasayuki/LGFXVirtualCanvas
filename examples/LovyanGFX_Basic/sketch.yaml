@@ -7,3 +7,5 @@ profiles:
     libraries:
       - LovyanGFX (1.2.21)
       - dir : ../../
+
+default_profile: m5stack_core2
