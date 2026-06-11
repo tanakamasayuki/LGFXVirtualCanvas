@@ -591,36 +591,50 @@ The minimum viable version satisfies:
 
 The table below maps representative LovyanGFX APIs (`LGFXBase` / `LGFX_Sprite`) to where they are handled in this library and the current support status.
 
-| LovyanGFX API (representative) | `LGFXVirtualCanvas` / manager mapping | Support | Notes |
+| LovyanGFX API group | `LGFXVirtualCanvas` / manager mapping | Support | Notes |
 |---|---:|:--:|---|
-| `fillScreen(color)` | `LGFXVirtualCanvas::fillScreen` | Supported | fills the tile; offset-independent |
-| `drawPixel(x,y, color)` | `LGFXVirtualCanvas::drawPixel` | Supported | subtracts `offsetY` and forwards to `_tile.drawPixel` |
-| `drawFastHLine` / `drawFastVLine` | `LGFXVirtualCanvas::drawFastHLine` / `drawFastVLine` | Supported | adjusts `y` and forwards to `_tile` |
-| `drawLine` / `drawTriangle` / `fillTriangle` | `LGFXVirtualCanvas::drawLine` / `drawTriangle` / `fillTriangle` | Supported | same-name methods on `LGFXVirtualCanvas` (apply `y` correction) |
-| `fillRect` / `drawRect` / `writeFillRectPreclipped` | `LGFXVirtualCanvas::fillRect` / `drawRect` | Supported / Not implemented | `fillRect`/`drawRect` are forwarded. low-level `writeFillRectPreclipped` not provided (could be added if needed). |
-| `fillRoundRect` / `drawRoundRect` | `LGFXVirtualCanvas::fillRoundRect` / `drawRoundRect` | Supported | forwarded (apply `y` correction) |
-| `drawCircle` / `fillCircle` / `drawCircleHelper` / `fillCircleHelper` | `LGFXVirtualCanvas::drawCircle` / `fillCircle` | Supported / Partial | basic circle APIs forwarded; helper variants not explicitly defined in Canvas (add if required). |
-| `drawEllipse` / `fillEllipse` / `drawEllipseArc` / `fillEllipseArc` | `LGFXVirtualCanvas::drawEllipse` / `fillEllipse` | Supported / Partial | basic ellipse forwarded; arc/sector APIs need verification. |
-| `drawBezier` | not present on Canvas | Not supported | Bezier APIs exist in LGFX but not forwarded by Canvas (candidate for future work). |
-| wide/AA line APIs (`drawWideLine` / `drawWedgeLine` / `drawSmoothLine` / `drawSpot`) | - | Not supported / future | AA and wide-line semantics interact with tile boundaries — design work required. |
-| gradient APIs (`drawGradientLine` / `drawGradientHLine` / `drawGradientVLine` / `fillGradientRect`) | - | Not implemented | Color-interpolation APIs are many; prioritize as needed. |
-| basic image push (`pushImage` overloads) | `LGFXVirtualCanvas::pushImage` | Supported (experimentally) | transparency and palette variants work; tile-boundary cases handled by sprite clip (§9.2). |
-| advanced image transforms (`pushImageRotateZoom` / `pushImageRotateZoomWithAA` / `pushImageAffine` / `pushImageAffineWithAA`) | - | Not supported / future | Many overloads and AA/palette cases — revalidation under tiling required. |
-| grayscale / alpha image (`pushGrayscaleImage` / `pushAlphaImage`) | partial | Partial | LGFX provides alpha/grayscale helpers; Canvas needs verification for correct blending across tiles. |
-| low-level pixel transfer (`writePixels` / `writePixelsDMA` / `pushPixels` / `pushPixelsDMA` / `pushBlock`) | - | Not supported | Low-level block writes are not exposed on Canvas; can be added if needed. |
-| readback (`readPixel`, `readRect`, `readRectRGB`) | - | Not supported | Read semantics in tiled mode need specification before implementation. |
-| scroll / copy (`scroll`, `copyRect`) | - | Not supported | Requires semantics definition for tiled surfaces. |
-| text stack (`setCursor`, `getCursorX/Y`, `setTextColor`, `setTextSize`, `setTextDatum`, `setFont`, `setTextFont`, `drawString`, `drawChar`, `drawNumber`, `drawFloat`, `print`, `println`, `printf`) | forwarded on Canvas | Supported | `setCursor` subtracts `offsetY`; `getCursorY()` returns virtual coordinate. print/println/printf forwarded to `_tile`. |
-| font metrics (`fontHeight`, `fontWidth`, `textWidth`, `textLength`) | indirect / delegated | Partial | Some metrics available via delegated font calls; verify for all overloads. |
-| image file draw (`drawBmp` / `drawJpg` / `drawPng` / `drawQoi` / drawImg generator) | partial | Partial | LGFX generator functions exist; calling them per-tile may re-decode each tile — pre-decode or single-shot rendering recommended. |
-| createPng / releasePngMemory | - | Not implemented | Output helpers can be added at manager level if required. |
-| window / clip (`setWindow`, `setClipRect`, `getClipRect`, `clearClipRect`, `setScrollRect`, `getScrollRect`, `clearScrollRect`) | managed by `LGFXVirtualTiledBase` | Supported (manager-side) | renderRegion sets panel clip for target rectangle. |
-| transfer / DMA control (`startWrite`, `endWrite`, `beginTransaction`, `endTransaction`, `waitDMA`, `initDMA`) | managed by `LGFXVirtualTiledBase` / panel | Supported (manager-side) | renderRegion wraps the tile loop in a single startWrite/endWrite and handles waitDMA for single-buffer mode. |
-| management (`setMemoryLimit`, `setSplitCount`, `setTileHeight`, `setBackgroundColor`, `setAutoClear`, `setDoubleBuffer`, `doubleBuffer`, `isReady`, `tileCount`, `tileHeight`) | `LGFXVirtualTiledBase` / `LGFXVirtualScreen` / `LGFXVirtualSprite` | Supported | tile allocation, split resolution and auto-clear/double-buffer policies are implemented here. |
+| geometry (`width`, `height`) | `LGFXVirtualCanvas` | Supported | returns the full virtual surface size |
+| color utilities (`color332`, `color565`, `color888`, `swap565`, `swap888`, conversions) | `LGFXVirtualCanvas` static helpers | Supported | forwards to LGFX-compatible conversion helpers |
+| state / palette / pivot / gradient helpers | `LGFXVirtualCanvas` | Supported | state is held by the current tile sprite; pivot Y is converted to/from virtual coordinates |
+| basic and advanced shapes | `LGFXVirtualCanvas` | Supported | all public wrappers apply virtual-to-tile Y correction where needed |
+| gradient, smooth, wide, and spot drawing | `LGFXVirtualCanvas` | Supported | tile clipping is handled by the sprite; parity tests cover representative cases |
+| image push / decode / QR / grayscale / alpha | `LGFXVirtualCanvas` | Supported | decode helpers are available, but expensive decodes should generally be done outside the per-tile callback |
+| readback (`readPixel`, `readPixelRGB`, `readPixelValue`, `readRectRGB`, `readRect`) | `LGFXVirtualCanvas` | Supported | reads from the current tile after virtual-to-tile Y correction |
+| text and metrics | `LGFXVirtualCanvas` | Supported | cursor Y is converted to/from virtual coordinates; font metrics are delegated to the tile |
+| window / clip / transfer / DMA control | `LGFXVirtualTiledBase` | Supported (manager-side) | renderRegion owns panel clipping, tile flushing, and DMA wait ordering |
+| management (`setMemoryLimit`, `setSplitCount`, `setTileHeight`, `setBackgroundColor`, `setAutoClear`, `setDoubleBuffer`, `doubleBuffer`, `isReady`, `tileCount`, `tileHeight`) | `LGFXVirtualTiledBase` / `LGFXVirtualScreen` / `LGFXVirtualSprite` | Supported | tile allocation, split resolution and auto-clear/double-buffer policies are implemented here |
+
+Not adopted function groups:
+
+- Low-level streaming writes (`writePixel`, `writeFastHLine`, `writeFastVLine`,
+  `writeFillRect`, `writeFillRectPreclipped`, `writeColor`, `pushBlock`,
+  `writePixels`, `writePixelsDMA`, `pushPixels`, `pushPixelsDMA`, `pushColor`,
+  `pushColors`) depend on a caller-managed write window / stream cursor and do
+  not carry enough virtual coordinate information for safe per-tile clipping.
+- Window, clip, and transaction controls (`setWindow`, `startWrite`,
+  `endWrite`, `beginTransaction`, `endTransaction`, `initDMA`, `waitDMA`) are
+  owned by the tiled manager. Exposing them on the callback canvas would allow
+  user code to break manager-side clipping and DMA ordering.
+- Scroll and copy APIs (`scroll`, `copyRect`, scroll-rect APIs) need pixels from
+  other tiles when source/destination rectangles cross tile boundaries. A
+  callback canvas only owns the current tile band.
+- Sprite transfer helpers (`pushSprite`, `pushRotated`, `pushRotatedWithAA`,
+  `pushRotateZoom`, `pushRotateZoomWithAA`, `pushAffine`, `pushAffineWithAA`)
+  transfer an `LGFX_Sprite` itself to another destination. `LGFXVirtualCanvas`
+  is already the destination; tile transfer is the manager's responsibility.
+- Affine image helpers (`pushImageAffine`, `pushImageAffineWithAA`,
+  `pushGrayscaleImageAffine`) embed destination coordinates in the affine
+  matrix. A simple virtual-to-tile Y offset wrapper is not correct for every
+  matrix.
+- Output/export helpers (`createPng`, `releasePngMemory`) operate on the
+  current tile buffer, not the full virtual surface. They should be manager-level
+  APIs if added later.
 
 Notes:
-- `Supported` marks implemented APIs in `src/LGFXVirtualCanvas.h`; `Not supported` means no forwarding/implementation yet; `Partial` or `Supported (with caveats)` indicate implemented but requiring additional testing or with known limitations.
+- `Supported` marks implemented APIs in `src/LGFXVirtualCanvas.h`. The "not
+  adopted" groups above are intentionally omitted from the supported mapping,
+  not simply forgotten.
 - LovyanGFX exposes many template/overload combinations; a full 1:1 mapping is large. Recommended next steps:
     1. auto-extract public LovyanGFX drawing APIs to CSV (names/signatures/overload counts),
     2. auto-extract implemented Canvas methods and produce a diff CSV,
-    3. create Issues / task list for `Not supported` items (suggest priorities such as high: `pushImageRotateZoom`/`pushImageAffine`/`readRect`).
+    3. review newly found gaps against the not-adopted groups before adding wrappers.

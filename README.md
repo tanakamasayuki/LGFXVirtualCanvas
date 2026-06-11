@@ -249,6 +249,34 @@ maps your full-screen (virtual) coordinates onto the current tile. Supported:
 Calling a method that is not (yet) wrapped is a compile error — by design, so
 unsupported drawing fails loudly rather than silently.
 
+Not adopted function groups:
+
+- Low-level streaming writes: `writePixel`, `writeFastHLine`,
+  `writeFastVLine`, `writeFillRect`, `writeFillRectPreclipped`,
+  `writeColor`, `pushBlock`, `writePixels`, `writePixelsDMA`,
+  `pushPixels`, `pushPixelsDMA`, `pushColor`, `pushColors`.
+  These APIs depend on the caller-managed write window / stream cursor and do
+  not carry enough virtual coordinate information for safe per-tile clipping.
+- Window, clip, and transaction controls: `setWindow`, `startWrite`,
+  `endWrite`, `beginTransaction`, `endTransaction`, `initDMA`, `waitDMA`.
+  `LGFXVirtualScreen` / `LGFXVirtualSprite` own those operations while rendering
+  tiles; exposing them on the callback canvas would let user code break the
+  manager's clipping and DMA ordering guarantees.
+- Scroll and copy: `scroll`, `copyRect`, scroll-rect APIs. These mutate or copy
+  existing pixels across a surface. A tile only contains one band of the virtual
+  surface, so cross-tile source/destination pixels are not available.
+- Sprite-to-panel transfer helpers: `pushSprite`, `pushRotated`,
+  `pushRotatedWithAA`, `pushRotateZoom`, `pushRotateZoomWithAA`, `pushAffine`,
+  `pushAffineWithAA`. These are methods for transferring an `LGFX_Sprite`
+  itself to another destination; `LGFXVirtualCanvas` is already the destination
+  surface, and tile flushing is handled by the manager.
+- Affine image helpers: `pushImageAffine`, `pushImageAffineWithAA`,
+  `pushGrayscaleImageAffine`. The affine matrix embeds destination coordinates,
+  so a simple `y -= offsetY` wrapper is not sufficient for all matrices.
+- Output/export helpers: `createPng`, `releasePngMemory`. These operate on the
+  current tile buffer, not the full virtual surface, so they belong on a future
+  manager-level export API if needed.
+
 ### Detecting availability
 
 Including `LGFXVirtualCanvas.h` defines `LGFXVIRTUALCANVAS_H`, so other code or
