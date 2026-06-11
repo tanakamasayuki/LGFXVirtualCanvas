@@ -68,6 +68,7 @@ void drawVcScene(LGFXVirtualCanvas &g)
     g.writePixel(4, 4, TFT_WHITE);
     g.fillRect(W / 4, H / 4, W / 2, H / 2, TFT_RED);
     g.writeFillRect(W / 4 + 2, H / 4 + 2, 6, 4, TFT_BLACK);
+    g.writeFillRectPreclipped(W / 4 + 10, H / 4 + 2, 6, 4, TFT_WHITE);
     g.fillRectAlpha(W / 4 + 8, H / 4 + 8, 28, 18, 96, TFT_WHITE);
     g.fillCircle(W / 2, H / 2, s / 6, TFT_YELLOW);
     g.drawCircle(W / 2, H / 2, s / 5, TFT_GREEN);

@@ -607,13 +607,14 @@ LGFXVirtualCanvas の上に以下を追加できる設計にする。
 
 採用しない関数群：
 
-- 低レベルのストリーミング描画（`writeFillRectPreclipped`, `writeColor`,
-  `pushBlock`, `writePixels`, `writePixelsDMA`, `pushPixels`,
-  `pushPixelsDMA`, `pushColor`, `pushColors`）は、呼び出し側が管理する
-  write window / stream cursor に依存し、安全な tile 単位クリップに必要な
-  仮想座標情報を十分に持たない。`writePixel`, `writeFastHLine`,
-  `writeFastVLine`, `writeFillRect` のような座標付き write API は、仮想 Y を
-  安全に変換できるため対応する。
+- 低レベルのストリーミング描画（`writeColor`, `pushBlock`, `writePixels`,
+  `writePixelsDMA`, `pushPixels`, `pushPixelsDMA`, `pushColor`, `pushColors`）は、
+  呼び出し側が管理する write window / stream cursor に依存し、安全な tile
+  単位クリップに必要な仮想座標情報を十分に持たない。`writePixel`,
+  `writeFastHLine`, `writeFastVLine`, `writeFillRect`,
+  `writeFillRectPreclipped` のような座標付き write API は、仮想 Y を安全に変換
+  できるため対応する。`writeFillRectPreclipped` は caller の preclip を信用せず、
+  VirtualCanvas 内では clip される `fillRect` 相当として扱う。
 - window / clip / transaction 制御（`setWindow`, `startWrite`, `endWrite`,
   `beginTransaction`, `endTransaction`, `initDMA`, `waitDMA`）は tiled manager
   が所有する。callback canvas に公開すると、管理側の clip と DMA 順序保証を

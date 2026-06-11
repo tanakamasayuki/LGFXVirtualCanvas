@@ -188,6 +188,12 @@ public:
     /// @brief Write a filled rectangle.
     template <typename T>
     void writeFillRect(int32_t x, int32_t y, int32_t w, int32_t h, const T &color) { _tile.writeFillRect(x, y - _offsetY, w, h, color); }
+    /// @brief Compatibility wrapper for LGFX preclipped rectangle writes.
+    /// @note VirtualCanvas clips through fillRect instead of trusting the caller's preclip.
+    void writeFillRectPreclipped(int32_t x, int32_t y, int32_t w, int32_t h) { _tile.fillRect(x, y - _offsetY, w, h); }
+    /// @brief Compatibility wrapper for LGFX preclipped rectangle writes.
+    template <typename T>
+    void writeFillRectPreclipped(int32_t x, int32_t y, int32_t w, int32_t h, const T &color) { _tile.fillRect(x, y - _offsetY, w, h, color); }
     /// @brief Fill a rectangle with alpha compositing.
     template <typename T>
     void fillRectAlpha(int32_t x, int32_t y, int32_t w, int32_t h, uint8_t alpha, const T &color) { _tile.fillRectAlpha(x, y - _offsetY, w, h, alpha, color); }

@@ -606,13 +606,15 @@ The table below maps representative LovyanGFX APIs (`LGFXBase` / `LGFX_Sprite`) 
 
 Not adopted function groups:
 
-- Low-level streaming writes (`writeFillRectPreclipped`, `writeColor`,
-  `pushBlock`, `writePixels`, `writePixelsDMA`, `pushPixels`,
-  `pushPixelsDMA`, `pushColor`, `pushColors`) depend on a caller-managed write
-  window / stream cursor and do not carry enough virtual coordinate information
-  for safe per-tile clipping. Coordinate-bearing write APIs such as
-  `writePixel`, `writeFastHLine`, `writeFastVLine`, and `writeFillRect` are
-  supported because their virtual Y coordinate can be translated safely.
+- Low-level streaming writes (`writeColor`, `pushBlock`, `writePixels`,
+  `writePixelsDMA`, `pushPixels`, `pushPixelsDMA`, `pushColor`, `pushColors`)
+  depend on a caller-managed write window / stream cursor and do not carry
+  enough virtual coordinate information for safe per-tile clipping.
+  Coordinate-bearing write APIs such as `writePixel`, `writeFastHLine`,
+  `writeFastVLine`, `writeFillRect`, and `writeFillRectPreclipped` are supported
+  because their virtual Y coordinate can be translated safely. For
+  `writeFillRectPreclipped`, VirtualCanvas intentionally routes through clipped
+  `fillRect` semantics instead of trusting the caller's preclip.
 - Window, clip, and transaction controls (`setWindow`, `startWrite`,
   `endWrite`, `beginTransaction`, `endTransaction`, `initDMA`, `waitDMA`) are
   owned by the tiled manager. Exposing them on the callback canvas would allow
