@@ -80,12 +80,28 @@ public:
     uint32_t getBaseColor(void) const { return _tile.getBaseColor(); }
     /// @brief Current color depth of the tile sprite.
     lgfx::v1::color_depth_t getColorDepth(void) const { return _tile.getColorDepth(); }
+    /// @brief Whether the tile sprite currently has a palette.
+    bool hasPalette(void) const { return _tile.hasPalette(); }
+    /// @brief Number of palette entries in the tile sprite.
+    uint32_t getPaletteCount(void) const { return _tile.getPaletteCount(); }
+    /// @brief Pointer to the tile sprite palette, if any.
+    auto getPalette(void) const -> decltype(static_cast<LGFX_Sprite *>(nullptr)->getPalette()) { return _tile.getPalette(); }
 
     /// @brief Fill the whole virtual screen with @p color (offset-independent; see SPEC §11).
     template <typename T>
     void fillScreen(const T &color) { _tile.fillScreen(color); }
     /// @brief Fill the whole virtual screen with the current drawing color.
     void fillScreen(void) { _tile.fillScreen(); }
+    /// @brief Clear the virtual screen using the current base color.
+    void clear(void) { _tile.fillScreen(_tile.getBaseColor()); }
+    /// @brief Clear the virtual screen using @p color.
+    template <typename T>
+    void clear(const T &color) { _tile.fillScreen(color); }
+    /// @brief Clear the virtual display using the current base color.
+    void clearDisplay(void) { clear(); }
+    /// @brief Clear the virtual display using @p color.
+    template <typename T>
+    void clearDisplay(const T &color) { clear(color); }
 
     /// @brief Draw a single pixel at virtual (@p x, @p y).
     template <typename T>
@@ -116,6 +132,9 @@ public:
     void fillRect(int32_t x, int32_t y, int32_t w, int32_t h, const T &color) { _tile.fillRect(x, y - _offsetY, w, h, color); }
     /// @brief Fill a rectangle with the current drawing color.
     void fillRect(int32_t x, int32_t y, int32_t w, int32_t h) { _tile.fillRect(x, y - _offsetY, w, h); }
+    /// @brief Fill a rectangle with alpha compositing.
+    template <typename T>
+    void fillRectAlpha(int32_t x, int32_t y, int32_t w, int32_t h, uint8_t alpha, const T &color) { _tile.fillRectAlpha(x, y - _offsetY, w, h, alpha, color); }
 
     /// @brief Draw a rectangle outline at virtual (@p x, @p y) of size @p w × @p h.
     template <typename T>
@@ -492,6 +511,14 @@ public:
     size_t println(const T &v, int base) { return _tile.println(v, base); }
     /// @brief Print a newline.
     size_t println(void) { return _tile.println(); }
+    /// @brief Write one UTF-8 byte/code unit at the cursor.
+    size_t write(uint8_t utf8) { return _tile.write(utf8); }
+    /// @brief Write a byte buffer at the cursor.
+    size_t write(const uint8_t *buf, size_t size) { return _tile.write(buf, size); }
+    /// @brief Write a C string at the cursor.
+    size_t write(const char *str) { return _tile.write(str); }
+    /// @brief Write a C string span at the cursor.
+    size_t write(const char *buf, size_t size) { return _tile.write(buf, size); }
 
     /// @brief printf-style formatted text at the cursor (up to 159 chars per call).
     int printf(const char *format, ...)
@@ -504,6 +531,8 @@ public:
         _tile.print(buf);
         return n;
     }
+    /// @brief vprintf-style formatted text at the cursor.
+    size_t vprintf(const char *format, va_list arg) { return _tile.vprintf(format, arg); }
 
 private:
     LGFX_Sprite &_tile;

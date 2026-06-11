@@ -214,17 +214,19 @@ maps your full-screen (virtual) coordinates onto the current tile. Supported:
 
 - Geometry: `width()`, `height()` (the full virtual screen)
 - State: `setColor`, `setRawColor`, `getRawColor`, `setBaseColor`,
-  `getBaseColor`, `getColorDepth`, `setPivot`, `getPivotX/Y`,
-  `createGradient`, `mapGradient`
+  `getBaseColor`, `getColorDepth`, `hasPalette`, `getPaletteCount`,
+  `getPalette`, `setPivot`, `getPivotX/Y`, `createGradient`,
+  `mapGradient`
 - Shapes: `fillScreen`, `drawPixel`, `drawLine`, `drawFastHLine`,
   `drawFastVLine`, `fillRect`, `drawRect`, `fillRoundRect`,
   `drawRoundRect`, `drawCircle`, `fillCircle`, `drawEllipse`,
   `fillEllipse`, `drawTriangle`, `fillTriangle`, `drawBezier`,
-  `drawEllipseArc`, `fillEllipseArc`, `drawArc`, `fillArc`,
-  `drawCircleHelper`, `fillCircleHelper`, `drawGradientHLine`,
-  `drawGradientVLine`, `drawGradientLine`, `fillGradientRect`,
-  `drawSmoothLine`, `drawWideLine`, `drawWedgeLine`, `drawSpot`,
-  `drawGradientSpot`, `fillSmoothRoundRect`, `fillSmoothCircle`
+  `drawEllipseArc`, `fillEllipseArc`, `drawArc`, `fillArc`, `clear`,
+  `clearDisplay`, `drawCircleHelper`, `fillCircleHelper`,
+  `drawGradientHLine`, `drawGradientVLine`, `drawGradientLine`,
+  `fillGradientRect`, `fillRectAlpha`, `drawSmoothLine`, `drawWideLine`,
+  `drawWedgeLine`, `drawSpot`, `drawGradientSpot`, `fillSmoothRoundRect`,
+  `fillSmoothCircle`
 - Image: `pushImage`, `drawBitmap`, `drawXBitmap`, `setSwapBytes`,
   `getSwapBytes`, `drawBmp`, `drawBmpFile`, `drawJpg`, `drawJpgFile`,
   `drawPng`, `drawPngFile`, `drawQoi`, `drawQoiFile`, `qrcode`
@@ -235,7 +237,7 @@ maps your full-screen (virtual) coordinates onto the current tile. Supported:
   `setTextFont`, `setFreeFont`, `getFont`, `getTextFont`, `fontHeight`,
   `fontWidth`, `textWidth`, `textLength`, `drawString`, `drawCentreString`,
   `drawCenterString`, `drawRightString`, `drawNumber`, `drawFloat`,
-  `drawChar`, `print`, `println`, `printf`
+  `drawChar`, `print`, `println`, `write`, `printf`, `vprintf`
 
 Calling a method that is not (yet) wrapped is a compile error — by design, so
 unsupported drawing fails loudly rather than silently.

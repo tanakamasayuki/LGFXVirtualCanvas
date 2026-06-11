@@ -44,6 +44,7 @@ void drawVcScene(LGFXVirtualCanvas &g)
     g.drawRect(0, 0, W, H, TFT_WHITE);
     g.drawRect(2, 2, W - 4, H - 4);
     g.fillRect(W / 4, H / 4, W / 2, H / 2, TFT_RED);
+    g.fillRectAlpha(W / 4 + 8, H / 4 + 8, 28, 18, 96, TFT_WHITE);
     g.fillCircle(W / 2, H / 2, s / 6, TFT_YELLOW);
     g.drawCircle(W / 2, H / 2, s / 5, TFT_GREEN);
     g.drawLine(0, 0, W, H, TFT_CYAN);
@@ -76,6 +77,7 @@ void drawVcScene(LGFXVirtualCanvas &g)
     g.setTextWrap(false);
     g.setTextScroll(false);
     g.setCursor(6, 6);
+    g.write((const uint8_t *)"VC ", 3);
     g.printf("%dx%d", W, H);
     g.drawString("VirtualCanvas", 6, H - 20);
     g.drawCenterString("C", W / 2, 6);
