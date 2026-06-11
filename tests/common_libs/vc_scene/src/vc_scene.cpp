@@ -33,6 +33,13 @@ static const uint8_t kBits8x8[] = {
     0x81,
 };
 
+static const uint16_t kImage4x4[] = {
+    TFT_RED, TFT_GREEN, TFT_BLUE, TFT_WHITE,
+    TFT_YELLOW, TFT_CYAN, TFT_MAGENTA, TFT_BLACK,
+    TFT_WHITE, TFT_BLUE, TFT_GREEN, TFT_RED,
+    TFT_BLACK, TFT_MAGENTA, TFT_CYAN, TFT_YELLOW,
+};
+
 void drawVcScene(LGFXVirtualCanvas &g)
 {
     const int W = g.width();
@@ -67,6 +74,9 @@ void drawVcScene(LGFXVirtualCanvas &g)
     g.drawSpot(W - 34, H / 2 + 34, 4.0f, TFT_YELLOW);
     g.fillSmoothCircle(34, 42, 8, TFT_SKYBLUE);
     g.fillSmoothRoundRect(50, 34, 28, 18, 5, TFT_DARKCYAN);
+    g.pushImageDMA(12, H / 2 + 12, 4, 4, kImage4x4);
+    g.pushImageRotateZoom(-20.0f, -20.0f, 2.0f, 2.0f, 20.0f, 1.5f, 1.5f, 4, 4, kImage4x4);
+    g.pushImageRotateZoomWithAA(-20.0f, -20.0f, 2.0f, 2.0f, -20.0f, 1.5f, 1.5f, 4, 4, kImage4x4, TFT_BLACK);
     g.drawBitmap(W - 18, H - 18, kBits8x8, 8, 8, TFT_WHITE);
     g.drawXBitmap(W - 30, H - 18, kBits8x8, 8, 8, TFT_GREEN, TFT_BLACK);
     g.qrcode("VC", W - 36, 6, 24, 1);

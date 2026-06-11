@@ -215,7 +215,7 @@ maps your full-screen (virtual) coordinates onto the current tile. Supported:
 - Geometry: `width()`, `height()` (the full virtual screen)
 - State: `setColor`, `setRawColor`, `getRawColor`, `setBaseColor`,
   `getBaseColor`, `getColorDepth`, `hasPalette`, `getPaletteCount`,
-  `getPalette`, `setPivot`, `getPivotX/Y`, `createGradient`,
+  `getPalette`, `setPaletteColor`, `setPivot`, `getPivotX/Y`, `createGradient`,
   `mapGradient`
 - Shapes: `fillScreen`, `drawPixel`, `drawLine`, `drawFastHLine`,
   `drawFastVLine`, `fillRect`, `drawRect`, `fillRoundRect`,
@@ -227,9 +227,11 @@ maps your full-screen (virtual) coordinates onto the current tile. Supported:
   `fillGradientRect`, `fillRectAlpha`, `drawSmoothLine`, `drawWideLine`,
   `drawWedgeLine`, `drawSpot`, `drawGradientSpot`, `fillSmoothRoundRect`,
   `fillSmoothCircle`
-- Image: `pushImage`, `drawBitmap`, `drawXBitmap`, `setSwapBytes`,
+- Image: `pushImage`, `pushImageDMA`, `pushImageRotateZoom`,
+  `pushImageRotateZoomWithAA`, `drawBitmap`, `drawXBitmap`, `setSwapBytes`,
   `getSwapBytes`, `drawBmp`, `drawBmpFile`, `drawJpg`, `drawJpgFile`,
   `drawPng`, `drawPngFile`, `drawQoi`, `drawQoiFile`, `qrcode`
+- Readback: `readPixel`, `readPixelRGB`, `readPixelValue`
 - Text: `setCursor`, `getCursorX/Y`, `setTextColor`, `setTextSize`,
   `getTextSizeX/Y`, `setTextDatum`, `getTextDatum`, `setTextPadding`,
   `getTextPadding`, `setTextWrap`, `setTextScroll`, `setEmojiCallback`,

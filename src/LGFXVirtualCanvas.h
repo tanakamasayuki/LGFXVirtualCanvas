@@ -36,6 +36,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstdint>
+#include <utility>
 
 #include "lgfxvirtualcanvas_version.h"
 
@@ -85,7 +86,12 @@ public:
     /// @brief Number of palette entries in the tile sprite.
     uint32_t getPaletteCount(void) const { return _tile.getPaletteCount(); }
     /// @brief Pointer to the tile sprite palette, if any.
-    auto getPalette(void) const -> decltype(static_cast<LGFX_Sprite *>(nullptr)->getPalette()) { return _tile.getPalette(); }
+    auto getPalette(void) const -> decltype(std::declval<LGFX_Sprite &>().getPalette()) { return _tile.getPalette(); }
+    /// @brief Set one palette entry on the tile sprite.
+    template <typename T>
+    void setPaletteColor(size_t index, const T &color) { _tile.setPaletteColor(index, color); }
+    /// @brief Set one palette entry from RGB components.
+    void setPaletteColor(size_t index, uint8_t r, uint8_t g, uint8_t b) { _tile.setPaletteColor(index, r, g, b); }
 
     /// @brief Fill the whole virtual screen with @p color (offset-independent; see SPEC §11).
     template <typename T>
@@ -108,6 +114,12 @@ public:
     void drawPixel(int32_t x, int32_t y, const T &color) { _tile.drawPixel(x, y - _offsetY, color); }
     /// @brief Draw a single pixel with the current drawing color.
     void drawPixel(int32_t x, int32_t y) { _tile.drawPixel(x, y - _offsetY); }
+    /// @brief Read a pixel from virtual (@p x, @p y) as RGB565 from the current tile.
+    uint16_t readPixel(int32_t x, int32_t y) { return _tile.readPixel(x, y - _offsetY); }
+    /// @brief Read a pixel from virtual (@p x, @p y) as an RGB color object from the current tile.
+    auto readPixelRGB(int32_t x, int32_t y) -> decltype(std::declval<LGFX_Sprite &>().readPixelRGB(0, 0)) { return _tile.readPixelRGB(x, y - _offsetY); }
+    /// @brief Read a raw pixel value from virtual (@p x, @p y) from the current tile.
+    uint32_t readPixelValue(int32_t x, int32_t y) { return _tile.readPixelValue(x, y - _offsetY); }
 
     /// @brief Draw a horizontal line of width @p w from virtual (@p x, @p y).
     template <typename T>
@@ -295,6 +307,42 @@ public:
     /// @brief Push an image, treating @p transparent as a see-through color.
     template <typename T>
     void pushImage(int32_t x, int32_t y, int32_t w, int32_t h, const T *data, const T &transparent) { _tile.pushImage(x, y - _offsetY, w, h, data, transparent); }
+    /// @brief Push an image with explicit source color depth and palette.
+    template <typename T>
+    void pushImage(int32_t x, int32_t y, int32_t w, int32_t h, const void *data, lgfx::v1::color_depth_t depth, const T *palette) { _tile.pushImage(x, y - _offsetY, w, h, data, depth, palette); }
+    /// @brief Push an image with explicit source color depth, palette, and transparent raw color.
+    template <typename T>
+    void pushImage(int32_t x, int32_t y, int32_t w, int32_t h, const void *data, uint32_t transparent, lgfx::v1::color_depth_t depth, const T *palette) { _tile.pushImage(x, y - _offsetY, w, h, data, transparent, depth, palette); }
+    /// @brief Push an image using LovyanGFX's DMA-capable path when available.
+    template <typename T>
+    void pushImageDMA(int32_t x, int32_t y, int32_t w, int32_t h, const T *data) { _tile.pushImageDMA(x, y - _offsetY, w, h, data); }
+    /// @brief Push an image with explicit source color depth and palette using the DMA-capable path when available.
+    template <typename T>
+    void pushImageDMA(int32_t x, int32_t y, int32_t w, int32_t h, const void *data, lgfx::v1::color_depth_t depth, const T *palette) { _tile.pushImageDMA(x, y - _offsetY, w, h, data, depth, palette); }
+    /// @brief Push an image with rotation and scaling.
+    template <typename T>
+    void pushImageRotateZoom(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const T *data) { _tile.pushImageRotateZoom(dst_x, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, data); }
+    /// @brief Push an image with rotation, scaling, and transparency.
+    template <typename T1, typename T2>
+    void pushImageRotateZoom(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const T1 *data, const T2 &transparent) { _tile.pushImageRotateZoom(dst_x, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, data, transparent); }
+    /// @brief Push an image with rotation/scaling, explicit source color depth, and palette.
+    template <typename T>
+    void pushImageRotateZoom(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const void *data, lgfx::v1::color_depth_t depth, const T *palette) { _tile.pushImageRotateZoom(dst_x, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, data, depth, palette); }
+    /// @brief Push an image with rotation/scaling, explicit source color depth, palette, and transparent raw color.
+    template <typename T>
+    void pushImageRotateZoom(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const void *data, uint32_t transparent, lgfx::v1::color_depth_t depth, const T *palette) { _tile.pushImageRotateZoom(dst_x, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, data, transparent, depth, palette); }
+    /// @brief Push an image with anti-aliased rotation and scaling.
+    template <typename T>
+    void pushImageRotateZoomWithAA(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const T *data) { _tile.pushImageRotateZoomWithAA(dst_x, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, data); }
+    /// @brief Push an image with anti-aliased rotation, scaling, and transparency.
+    template <typename T1, typename T2>
+    void pushImageRotateZoomWithAA(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const T1 *data, const T2 &transparent) { _tile.pushImageRotateZoomWithAA(dst_x, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, data, transparent); }
+    /// @brief Push an image with anti-aliased rotation/scaling, explicit source color depth, and palette.
+    template <typename T>
+    void pushImageRotateZoomWithAA(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const void *data, lgfx::v1::color_depth_t depth, const T *palette) { _tile.pushImageRotateZoomWithAA(dst_x, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, data, depth, palette); }
+    /// @brief Push an image with anti-aliased rotation/scaling, explicit source color depth, palette, and transparent raw color.
+    template <typename T>
+    void pushImageRotateZoomWithAA(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const void *data, uint32_t transparent, lgfx::v1::color_depth_t depth, const T *palette) { _tile.pushImageRotateZoomWithAA(dst_x, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, data, transparent, depth, palette); }
     /// @brief Draw a 1-bit bitmap at virtual (@p x, @p y).
     template <typename T>
     void drawBitmap(int32_t x, int32_t y, const uint8_t *bitmap, int32_t w, int32_t h, const T &color) { _tile.drawBitmap(x, y - _offsetY, bitmap, w, h, color); }
