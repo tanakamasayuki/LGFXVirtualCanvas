@@ -40,6 +40,20 @@ static const uint16_t kImage4x4[] = {
     TFT_BLACK, TFT_MAGENTA, TFT_CYAN, TFT_YELLOW,
 };
 
+static const uint8_t kGray4x4[] = {
+    0, 64, 128, 255,
+    255, 128, 64, 0,
+    32, 96, 160, 224,
+    224, 160, 96, 32,
+};
+
+static const lgfx::v1::argb8888_t kAlpha2x2[] = {
+    lgfx::v1::argb8888_t(96, 255, 255, 255),
+    lgfx::v1::argb8888_t(160, 255, 0, 0),
+    lgfx::v1::argb8888_t(160, 0, 255, 0),
+    lgfx::v1::argb8888_t(96, 0, 0, 255),
+};
+
 void drawVcScene(LGFXVirtualCanvas &g)
 {
     const int W = g.width();
@@ -48,6 +62,7 @@ void drawVcScene(LGFXVirtualCanvas &g)
 
     g.fillScreen(TFT_NAVY);
     g.setColor(TFT_WHITE);
+    (void)LGFXVirtualCanvas::color565(255, 0, 0);
     g.drawRect(0, 0, W, H, TFT_WHITE);
     g.drawRect(2, 2, W - 4, H - 4);
     g.fillRect(W / 4, H / 4, W / 2, H / 2, TFT_RED);
@@ -75,8 +90,11 @@ void drawVcScene(LGFXVirtualCanvas &g)
     g.fillSmoothCircle(34, 42, 8, TFT_SKYBLUE);
     g.fillSmoothRoundRect(50, 34, 28, 18, 5, TFT_DARKCYAN);
     g.pushImageDMA(12, H / 2 + 12, 4, 4, kImage4x4);
+    g.pushGrayscaleImage(54, H / 2 + 12, 4, 4, kGray4x4, lgfx::v1::grayscale_8bit, TFT_WHITE, TFT_BLACK);
+    g.pushAlphaImage(62, H / 2 + 12, 2, 2, kAlpha2x2);
     g.pushImageRotateZoom(-20.0f, -20.0f, 2.0f, 2.0f, 20.0f, 1.5f, 1.5f, 4, 4, kImage4x4);
     g.pushImageRotateZoomWithAA(-20.0f, -20.0f, 2.0f, 2.0f, -20.0f, 1.5f, 1.5f, 4, 4, kImage4x4, TFT_BLACK);
+    g.pushGrayscaleImageRotateZoom(-20.0f, -20.0f, 2.0f, 2.0f, 10.0f, 1.0f, 1.0f, 4, 4, kGray4x4, lgfx::v1::grayscale_8bit, TFT_WHITE, TFT_BLACK);
     g.drawBitmap(W - 18, H - 18, kBits8x8, 8, 8, TFT_WHITE);
     g.drawXBitmap(W - 30, H - 18, kBits8x8, 8, 8, TFT_GREEN, TFT_BLACK);
     g.qrcode("VC", W - 36, 6, 24, 1);
@@ -94,6 +112,10 @@ void drawVcScene(LGFXVirtualCanvas &g)
     g.drawNumber(123, W - 42, H / 2 - 10);
     g.drawFloat(3.14f, 2, W - 50, H / 2 + 4);
     g.drawChar('A', 6, H / 2 + 8);
+    uint16_t px = g.readPixel(0, 0);
+    uint8_t rgb[3] = {};
+    g.readRectRGB(0, 0, 1, 1, rgb);
+    g.readRect(0, 0, 1, 1, &px);
 }
 
 bool savePng(LovyanGFX &src, const char *path)

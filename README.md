@@ -213,6 +213,8 @@ Passed to your draw function. It looks like a normal LGFX/M5GFX canvas but
 maps your full-screen (virtual) coordinates onto the current tile. Supported:
 
 - Geometry: `width()`, `height()` (the full virtual screen)
+- Color utilities: `color332`, `color565`, `color888`, `swap565`,
+  `swap888`, `color16to8`, `color8to16`, `color16to24`, `color24to16`
 - State: `setColor`, `setRawColor`, `getRawColor`, `setBaseColor`,
   `getBaseColor`, `getColorDepth`, `hasPalette`, `getPaletteCount`,
   `getPalette`, `setPaletteColor`, `setPivot`, `getPivotX/Y`, `createGradient`,
@@ -228,10 +230,13 @@ maps your full-screen (virtual) coordinates onto the current tile. Supported:
   `drawWedgeLine`, `drawSpot`, `drawGradientSpot`, `fillSmoothRoundRect`,
   `fillSmoothCircle`
 - Image: `pushImage`, `pushImageDMA`, `pushImageRotateZoom`,
-  `pushImageRotateZoomWithAA`, `drawBitmap`, `drawXBitmap`, `setSwapBytes`,
-  `getSwapBytes`, `drawBmp`, `drawBmpFile`, `drawJpg`, `drawJpgFile`,
-  `drawPng`, `drawPngFile`, `drawQoi`, `drawQoiFile`, `qrcode`
-- Readback: `readPixel`, `readPixelRGB`, `readPixelValue`
+  `pushImageRotateZoomWithAA`, `pushGrayscaleImage`,
+  `pushGrayscaleImageRotateZoom`, `pushAlphaImage`, `drawBitmap`,
+  `drawXBitmap`, `setSwapBytes`, `getSwapBytes`, `drawBmp`, `drawBmpFile`,
+  `drawJpg`, `drawJpgFile`, `drawPng`, `drawPngFile`, `drawQoi`,
+  `drawQoiFile`, `qrcode`
+- Readback: `readPixel`, `readPixelRGB`, `readPixelValue`, `readRectRGB`,
+  `readRect`
 - Text: `setCursor`, `getCursorX/Y`, `setTextColor`, `setTextSize`,
   `getTextSizeX/Y`, `setTextDatum`, `getTextDatum`, `setTextPadding`,
   `getTextPadding`, `setTextWrap`, `setTextScroll`, `setEmojiCallback`,

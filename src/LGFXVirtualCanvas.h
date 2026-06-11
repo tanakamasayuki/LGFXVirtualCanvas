@@ -65,6 +65,25 @@ public:
     /// @brief Surface height in pixels (the full drawable surface, not the tile).
     int32_t height(void) const { return _virtualHeight; }
 
+    /// @brief Convert RGB888 components to RGB332.
+    static constexpr uint8_t color332(uint8_t r, uint8_t g, uint8_t b) { return LGFX_Sprite::color332(r, g, b); }
+    /// @brief Convert RGB888 components to RGB565.
+    static constexpr uint16_t color565(uint8_t r, uint8_t g, uint8_t b) { return LGFX_Sprite::color565(r, g, b); }
+    /// @brief Convert RGB888 components to RGB888 packed integer.
+    static constexpr uint32_t color888(uint8_t r, uint8_t g, uint8_t b) { return LGFX_Sprite::color888(r, g, b); }
+    /// @brief Convert RGB888 components to byte-swapped RGB565.
+    static constexpr uint16_t swap565(uint8_t r, uint8_t g, uint8_t b) { return LGFX_Sprite::swap565(r, g, b); }
+    /// @brief Convert RGB888 components to byte-swapped RGB888.
+    static constexpr uint32_t swap888(uint8_t r, uint8_t g, uint8_t b) { return LGFX_Sprite::swap888(r, g, b); }
+    /// @brief Convert RGB565 to RGB332.
+    static uint8_t color16to8(uint32_t rgb565) { return LGFX_Sprite::color16to8(rgb565); }
+    /// @brief Convert RGB332 to RGB565.
+    static uint16_t color8to16(uint32_t rgb332) { return LGFX_Sprite::color8to16(rgb332); }
+    /// @brief Convert RGB565 to RGB888.
+    static uint32_t color16to24(uint32_t rgb565) { return LGFX_Sprite::color16to24(rgb565); }
+    /// @brief Convert RGB888 to RGB565.
+    static uint16_t color24to16(uint32_t rgb888) { return LGFX_Sprite::color24to16(rgb888); }
+
     /// @brief Set the current drawing color.
     template <typename T>
     void setColor(const T &color) { _tile.setColor(color); }
@@ -120,6 +139,11 @@ public:
     auto readPixelRGB(int32_t x, int32_t y) -> decltype(std::declval<LGFX_Sprite &>().readPixelRGB(0, 0)) { return _tile.readPixelRGB(x, y - _offsetY); }
     /// @brief Read a raw pixel value from virtual (@p x, @p y) from the current tile.
     uint32_t readPixelValue(int32_t x, int32_t y) { return _tile.readPixelValue(x, y - _offsetY); }
+    /// @brief Read a rectangle as packed RGB888 bytes from the current tile.
+    void readRectRGB(int32_t x, int32_t y, int32_t w, int32_t h, uint8_t *data) { _tile.readRectRGB(x, y - _offsetY, w, h, data); }
+    /// @brief Read a rectangle from the current tile into @p data.
+    template <typename T>
+    void readRect(int32_t x, int32_t y, int32_t w, int32_t h, T *data) { _tile.readRect(x, y - _offsetY, w, h, data); }
 
     /// @brief Draw a horizontal line of width @p w from virtual (@p x, @p y).
     template <typename T>
@@ -343,6 +367,15 @@ public:
     /// @brief Push an image with anti-aliased rotation/scaling, explicit source color depth, palette, and transparent raw color.
     template <typename T>
     void pushImageRotateZoomWithAA(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const void *data, uint32_t transparent, lgfx::v1::color_depth_t depth, const T *palette) { _tile.pushImageRotateZoomWithAA(dst_x, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, data, transparent, depth, palette); }
+    /// @brief Push a grayscale image with explicit foreground/background colors.
+    template <typename T>
+    void pushGrayscaleImage(int32_t x, int32_t y, int32_t w, int32_t h, const uint8_t *image, lgfx::v1::color_depth_t depth, const T &forecolor, const T &backcolor) { _tile.pushGrayscaleImage(x, y - _offsetY, w, h, image, depth, forecolor, backcolor); }
+    /// @brief Push a grayscale image with rotation/scaling and explicit foreground/background colors.
+    template <typename T>
+    void pushGrayscaleImageRotateZoom(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const uint8_t *image, lgfx::v1::color_depth_t depth, const T &forecolor, const T &backcolor) { _tile.pushGrayscaleImageRotateZoom(dst_x, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, image, depth, forecolor, backcolor); }
+    /// @brief Push an ARGB/BGRA image with per-pixel alpha.
+    template <typename T>
+    void pushAlphaImage(int32_t x, int32_t y, int32_t w, int32_t h, const T *data) { _tile.pushAlphaImage(x, y - _offsetY, w, h, data); }
     /// @brief Draw a 1-bit bitmap at virtual (@p x, @p y).
     template <typename T>
     void drawBitmap(int32_t x, int32_t y, const uint8_t *bitmap, int32_t w, int32_t h, const T &color) { _tile.drawBitmap(x, y - _offsetY, bitmap, w, h, color); }
