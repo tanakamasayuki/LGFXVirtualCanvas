@@ -124,6 +124,26 @@ public:
     template <typename T>
     void fillTriangle(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2, const T &color) { _tile.fillTriangle(x0, y0 - _offsetY, x1, y1 - _offsetY, x2, y2 - _offsetY, color); }
 
+    /// @brief Draw a quadratic Bezier curve through virtual points.
+    template <typename T>
+    void drawBezier(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2, const T &color) { _tile.drawBezier(x0, y0 - _offsetY, x1, y1 - _offsetY, x2, y2 - _offsetY, color); }
+    /// @brief Draw a cubic Bezier curve through virtual points.
+    template <typename T>
+    void drawBezier(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2, int32_t x3, int32_t y3, const T &color) { _tile.drawBezier(x0, y0 - _offsetY, x1, y1 - _offsetY, x2, y2 - _offsetY, x3, y3 - _offsetY, color); }
+
+    /// @brief Draw an elliptical arc centered at virtual (@p x, @p y).
+    template <typename T>
+    void drawEllipseArc(int32_t x, int32_t y, int32_t r0x, int32_t r1x, int32_t r0y, int32_t r1y, float angle0, float angle1, const T &color) { _tile.drawEllipseArc(x, y - _offsetY, r0x, r1x, r0y, r1y, angle0, angle1, color); }
+    /// @brief Fill an elliptical arc centered at virtual (@p x, @p y).
+    template <typename T>
+    void fillEllipseArc(int32_t x, int32_t y, int32_t r0x, int32_t r1x, int32_t r0y, int32_t r1y, float angle0, float angle1, const T &color) { _tile.fillEllipseArc(x, y - _offsetY, r0x, r1x, r0y, r1y, angle0, angle1, color); }
+    /// @brief Draw a circular arc centered at virtual (@p x, @p y).
+    template <typename T>
+    void drawArc(int32_t x, int32_t y, int32_t r0, int32_t r1, float angle0, float angle1, const T &color) { _tile.drawArc(x, y - _offsetY, r0, r1, angle0, angle1, color); }
+    /// @brief Fill a circular arc centered at virtual (@p x, @p y).
+    template <typename T>
+    void fillArc(int32_t x, int32_t y, int32_t r0, int32_t r1, float angle0, float angle1, const T &color) { _tile.fillArc(x, y - _offsetY, r0, r1, angle0, angle1, color); }
+
     /// @brief Push a @p w × @p h image to virtual (@p x, @p y).
     /// @note The sprite's per-pixel clip discards rows outside the tile
     ///       (including negative dest Y, where LGFX offsets into the source),
@@ -133,6 +153,23 @@ public:
     /// @brief Push an image, treating @p transparent as a see-through color.
     template <typename T>
     void pushImage(int32_t x, int32_t y, int32_t w, int32_t h, const T *data, const T &transparent) { _tile.pushImage(x, y - _offsetY, w, h, data, transparent); }
+    /// @brief Draw a 1-bit bitmap at virtual (@p x, @p y).
+    template <typename T>
+    void drawBitmap(int32_t x, int32_t y, const uint8_t *bitmap, int32_t w, int32_t h, const T &color) { _tile.drawBitmap(x, y - _offsetY, bitmap, w, h, color); }
+    /// @brief Draw a 1-bit bitmap with foreground/background colors.
+    template <typename T>
+    void drawBitmap(int32_t x, int32_t y, const uint8_t *bitmap, int32_t w, int32_t h, const T &fg, const T &bg) { _tile.drawBitmap(x, y - _offsetY, bitmap, w, h, fg, bg); }
+    /// @brief Draw an XBM-format bitmap at virtual (@p x, @p y).
+    template <typename T>
+    void drawXBitmap(int32_t x, int32_t y, const uint8_t *bitmap, int32_t w, int32_t h, const T &color) { _tile.drawXBitmap(x, y - _offsetY, bitmap, w, h, color); }
+    /// @brief Draw an XBM-format bitmap with foreground/background colors.
+    template <typename T>
+    void drawXBitmap(int32_t x, int32_t y, const uint8_t *bitmap, int32_t w, int32_t h, const T &fg, const T &bg) { _tile.drawXBitmap(x, y - _offsetY, bitmap, w, h, fg, bg); }
+
+    /// @brief Whether 16-bit image data byte swapping is enabled.
+    bool getSwapBytes(void) const { return _tile.getSwapBytes(); }
+    /// @brief Enable/disable 16-bit image data byte swapping for pushImage().
+    void setSwapBytes(bool swap) { _tile.setSwapBytes(swap); }
 
     /// @brief Set the text cursor to virtual (@p x, @p y).
     /// @note `print`/`println`/`printf` then advance the cursor and reproduce
@@ -151,13 +188,54 @@ public:
     void setTextColor(const T &fg, const T &bg) { _tile.setTextColor(fg, bg); }
     /// @brief Set the text size multiplier.
     void setTextSize(float size) { _tile.setTextSize(size); }
+    /// @brief Set independent X/Y text size multipliers.
+    void setTextSize(float sx, float sy) { _tile.setTextSize(sx, sy); }
+    /// @brief Current X text size multiplier.
+    float getTextSizeX(void) const { return _tile.getTextSizeX(); }
+    /// @brief Current Y text size multiplier.
+    float getTextSizeY(void) const { return _tile.getTextSizeY(); }
     /// @brief Set the text datum (alignment anchor) used by drawString().
     void setTextDatum(textdatum_t datum) { _tile.setTextDatum(datum); }
+    /// @brief Set the text datum by numeric LovyanGFX datum value.
+    void setTextDatum(uint8_t datum) { _tile.setTextDatum(datum); }
+    /// @brief Current text datum.
+    textdatum_t getTextDatum(void) const { return _tile.getTextDatum(); }
+    /// @brief Set text padding used by aligned text drawing.
+    void setTextPadding(uint32_t padding) { _tile.setTextPadding(padding); }
+    /// @brief Current text padding.
+    uint32_t getTextPadding(void) const { return _tile.getTextPadding(); }
+    /// @brief Enable/disable cursor wrapping in X/Y directions.
+    void setTextWrap(bool wrapX, bool wrapY = false) { _tile.setTextWrap(wrapX, wrapY); }
+    /// @brief Set the whole LovyanGFX text style.
+    void setTextStyle(const lgfx::v1::TextStyle &style) { _tile.setTextStyle(style); }
+    /// @brief Current LovyanGFX text style.
+    const lgfx::v1::TextStyle &getTextStyle(void) const { return _tile.getTextStyle(); }
     /// @brief Set the current text font (e.g. a built-in font pointer).
     template <typename F>
     void setFont(const F &font) { _tile.setFont(font); }
     /// @brief Set the current built-in text font by number.
     void setTextFont(uint8_t font) { _tile.setTextFont(font); }
+    /// @brief Current built-in text font number when available.
+    uint_fast8_t getTextFont(void) const { return _tile.getTextFont(); }
+    /// @brief Current font height in pixels.
+    int32_t fontHeight(void) const { return _tile.fontHeight(); }
+    /// @brief Font height in pixels for @p font.
+    template <typename F>
+    int32_t fontHeight(const F &font) const { return _tile.fontHeight(font); }
+    /// @brief Current font width in pixels.
+    int32_t fontWidth(void) const { return _tile.fontWidth(); }
+    /// @brief Font width in pixels for @p font.
+    template <typename F>
+    int32_t fontWidth(const F &font) const { return _tile.fontWidth(font); }
+    /// @brief Text pixel width with the current font.
+    template <typename S>
+    int32_t textWidth(const S &str) { return _tile.textWidth(str); }
+    /// @brief Text pixel width with an explicit font.
+    template <typename S, typename F>
+    int32_t textWidth(const S &str, const F &font) { return _tile.textWidth(str, font); }
+    /// @brief Number of text characters that fit in @p width pixels.
+    template <typename S>
+    int32_t textLength(const S &str, int32_t width) { return _tile.textLength(str, width); }
 
     /// @brief Draw @p str at virtual (@p x, @p y). @p str may be const char* or String.
     template <typename S>
@@ -173,12 +251,40 @@ public:
     template <typename S, typename F>
     size_t drawCentreString(const S &str, int32_t x, int32_t y, const F &font) { return _tile.drawCentreString(str, x, y - _offsetY, font); }
 
+    /// @brief Alias of drawCentreString(), matching LovyanGFX's US spelling.
+    template <typename S>
+    size_t drawCenterString(const S &str, int32_t x, int32_t y) { return _tile.drawCenterString(str, x, y - _offsetY); }
+    /// @brief drawCenterString() with an explicit @p font.
+    template <typename S, typename F>
+    size_t drawCenterString(const S &str, int32_t x, int32_t y, const F &font) { return _tile.drawCenterString(str, x, y - _offsetY, font); }
+
     /// @brief Draw @p str right-aligned to virtual x = @p x, top at @p y.
     template <typename S>
     size_t drawRightString(const S &str, int32_t x, int32_t y) { return _tile.drawRightString(str, x, y - _offsetY); }
     /// @brief drawRightString() with an explicit @p font.
     template <typename S, typename F>
     size_t drawRightString(const S &str, int32_t x, int32_t y, const F &font) { return _tile.drawRightString(str, x, y - _offsetY, font); }
+
+    /// @brief Draw a number at virtual (@p x, @p y).
+    size_t drawNumber(long num, int32_t x, int32_t y) { return _tile.drawNumber(num, x, y - _offsetY); }
+    /// @brief Draw a number at virtual (@p x, @p y) with an explicit font.
+    template <typename F>
+    size_t drawNumber(long num, int32_t x, int32_t y, const F &font) { return _tile.drawNumber(num, x, y - _offsetY, font); }
+    /// @brief Draw a float at virtual (@p x, @p y).
+    size_t drawFloat(float value, uint8_t dp, int32_t x, int32_t y) { return _tile.drawFloat(value, dp, x, y - _offsetY); }
+    /// @brief Draw a float at virtual (@p x, @p y) with an explicit font.
+    template <typename F>
+    size_t drawFloat(float value, uint8_t dp, int32_t x, int32_t y, const F &font) { return _tile.drawFloat(value, dp, x, y - _offsetY, font); }
+    /// @brief Draw a Unicode code point at virtual (@p x, @p y).
+    size_t drawChar(uint16_t code, int32_t x, int32_t y) { return _tile.drawChar(code, x, y - _offsetY); }
+    /// @brief Draw a Unicode code point at virtual (@p x, @p y) with a built-in font.
+    size_t drawChar(uint16_t code, int32_t x, int32_t y, uint8_t font) { return _tile.drawChar(code, x, y - _offsetY, font); }
+    /// @brief Draw a Unicode code point with explicit colors and uniform text size.
+    template <typename T>
+    size_t drawChar(int32_t x, int32_t y, uint16_t code, const T &color, const T &bg, float size) { return _tile.drawChar(x, y - _offsetY, code, color, bg, size); }
+    /// @brief Draw a Unicode code point with explicit colors and X/Y text sizes.
+    template <typename T>
+    size_t drawChar(int32_t x, int32_t y, uint16_t code, const T &color, const T &bg, float sx, float sy) { return _tile.drawChar(x, y - _offsetY, code, color, bg, sx, sy); }
 
     /// @brief Print @p v at the cursor (covers all Arduino Print / LGFX overloads).
     template <typename T>

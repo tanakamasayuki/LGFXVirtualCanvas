@@ -216,11 +216,17 @@ maps your full-screen (virtual) coordinates onto the current tile. Supported:
 - Shapes: `fillScreen`, `drawPixel`, `drawLine`, `drawFastHLine`,
   `drawFastVLine`, `fillRect`, `drawRect`, `fillRoundRect`,
   `drawRoundRect`, `drawCircle`, `fillCircle`, `drawEllipse`,
-  `fillEllipse`, `drawTriangle`, `fillTriangle`
-- Image: `pushImage`
+  `fillEllipse`, `drawTriangle`, `fillTriangle`, `drawBezier`,
+  `drawEllipseArc`, `fillEllipseArc`, `drawArc`, `fillArc`
+- Image: `pushImage`, `drawBitmap`, `drawXBitmap`, `setSwapBytes`,
+  `getSwapBytes`
 - Text: `setCursor`, `getCursorX/Y`, `setTextColor`, `setTextSize`,
-  `setTextDatum`, `setFont`, `setTextFont`, `drawString`,
-  `drawCentreString`, `drawRightString`, `print`, `println`, `printf`
+  `getTextSizeX/Y`, `setTextDatum`, `getTextDatum`, `setTextPadding`,
+  `getTextPadding`, `setTextWrap`, `setTextStyle`, `getTextStyle`,
+  `setFont`, `setTextFont`, `getTextFont`, `fontHeight`, `fontWidth`,
+  `textWidth`, `textLength`, `drawString`, `drawCentreString`,
+  `drawCenterString`, `drawRightString`, `drawNumber`, `drawFloat`,
+  `drawChar`, `print`, `println`, `printf`
 
 Calling a method that is not (yet) wrapped is a compile error — by design, so
 unsupported drawing fails loudly rather than silently.
