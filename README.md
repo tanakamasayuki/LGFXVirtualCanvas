@@ -213,23 +213,27 @@ Passed to your draw function. It looks like a normal LGFX/M5GFX canvas but
 maps your full-screen (virtual) coordinates onto the current tile. Supported:
 
 - Geometry: `width()`, `height()` (the full virtual screen)
+- State: `setColor`, `setRawColor`, `getRawColor`, `setBaseColor`,
+  `getBaseColor`, `getColorDepth`, `setPivot`, `getPivotX/Y`,
+  `createGradient`, `mapGradient`
 - Shapes: `fillScreen`, `drawPixel`, `drawLine`, `drawFastHLine`,
   `drawFastVLine`, `fillRect`, `drawRect`, `fillRoundRect`,
   `drawRoundRect`, `drawCircle`, `fillCircle`, `drawEllipse`,
   `fillEllipse`, `drawTriangle`, `fillTriangle`, `drawBezier`,
   `drawEllipseArc`, `fillEllipseArc`, `drawArc`, `fillArc`,
-  `drawGradientHLine`, `drawGradientVLine`, `drawGradientLine`,
-  `fillGradientRect`, `drawSmoothLine`, `drawWideLine`,
-  `drawWedgeLine`, `drawSpot`, `drawGradientSpot`,
-  `fillSmoothRoundRect`, `fillSmoothCircle`
+  `drawCircleHelper`, `fillCircleHelper`, `drawGradientHLine`,
+  `drawGradientVLine`, `drawGradientLine`, `fillGradientRect`,
+  `drawSmoothLine`, `drawWideLine`, `drawWedgeLine`, `drawSpot`,
+  `drawGradientSpot`, `fillSmoothRoundRect`, `fillSmoothCircle`
 - Image: `pushImage`, `drawBitmap`, `drawXBitmap`, `setSwapBytes`,
   `getSwapBytes`, `drawBmp`, `drawBmpFile`, `drawJpg`, `drawJpgFile`,
   `drawPng`, `drawPngFile`, `drawQoi`, `drawQoiFile`, `qrcode`
 - Text: `setCursor`, `getCursorX/Y`, `setTextColor`, `setTextSize`,
   `getTextSizeX/Y`, `setTextDatum`, `getTextDatum`, `setTextPadding`,
-  `getTextPadding`, `setTextWrap`, `setTextStyle`, `getTextStyle`,
-  `setFont`, `setTextFont`, `getTextFont`, `fontHeight`, `fontWidth`,
-  `textWidth`, `textLength`, `drawString`, `drawCentreString`,
+  `getTextPadding`, `setTextWrap`, `setTextScroll`, `setEmojiCallback`,
+  `getEmojiCallback`, `setTextStyle`, `getTextStyle`, `setFont`,
+  `setTextFont`, `setFreeFont`, `getFont`, `getTextFont`, `fontHeight`,
+  `fontWidth`, `textWidth`, `textLength`, `drawString`, `drawCentreString`,
   `drawCenterString`, `drawRightString`, `drawNumber`, `drawFloat`,
   `drawChar`, `print`, `println`, `printf`
 

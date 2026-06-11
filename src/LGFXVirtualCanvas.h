@@ -64,65 +64,112 @@ public:
     /// @brief Surface height in pixels (the full drawable surface, not the tile).
     int32_t height(void) const { return _virtualHeight; }
 
+    /// @brief Set the current drawing color.
+    template <typename T>
+    void setColor(const T &color) { _tile.setColor(color); }
+    /// @brief Set the current drawing color from RGB components.
+    void setColor(uint8_t r, uint8_t g, uint8_t b) { _tile.setColor(r, g, b); }
+    /// @brief Set the current drawing raw color.
+    void setRawColor(uint32_t color) { _tile.setRawColor(color); }
+    /// @brief Current raw drawing color.
+    uint32_t getRawColor(void) const { return _tile.getRawColor(); }
+    /// @brief Set the base/background color used by clear/scroll-style LGFX APIs.
+    template <typename T>
+    void setBaseColor(const T &color) { _tile.setBaseColor(color); }
+    /// @brief Current base/background color as RGB888.
+    uint32_t getBaseColor(void) const { return _tile.getBaseColor(); }
+    /// @brief Current color depth of the tile sprite.
+    lgfx::v1::color_depth_t getColorDepth(void) const { return _tile.getColorDepth(); }
+
     /// @brief Fill the whole virtual screen with @p color (offset-independent; see SPEC §11).
     template <typename T>
     void fillScreen(const T &color) { _tile.fillScreen(color); }
+    /// @brief Fill the whole virtual screen with the current drawing color.
+    void fillScreen(void) { _tile.fillScreen(); }
 
     /// @brief Draw a single pixel at virtual (@p x, @p y).
     template <typename T>
     void drawPixel(int32_t x, int32_t y, const T &color) { _tile.drawPixel(x, y - _offsetY, color); }
+    /// @brief Draw a single pixel with the current drawing color.
+    void drawPixel(int32_t x, int32_t y) { _tile.drawPixel(x, y - _offsetY); }
 
     /// @brief Draw a horizontal line of width @p w from virtual (@p x, @p y).
     template <typename T>
     void drawFastHLine(int32_t x, int32_t y, int32_t w, const T &color) { _tile.drawFastHLine(x, y - _offsetY, w, color); }
+    /// @brief Draw a horizontal line with the current drawing color.
+    void drawFastHLine(int32_t x, int32_t y, int32_t w) { _tile.drawFastHLine(x, y - _offsetY, w); }
 
     /// @brief Draw a vertical line of height @p h from virtual (@p x, @p y).
     template <typename T>
     void drawFastVLine(int32_t x, int32_t y, int32_t h, const T &color) { _tile.drawFastVLine(x, y - _offsetY, h, color); }
+    /// @brief Draw a vertical line with the current drawing color.
+    void drawFastVLine(int32_t x, int32_t y, int32_t h) { _tile.drawFastVLine(x, y - _offsetY, h); }
 
     /// @brief Draw a line between virtual (@p x0, @p y0) and (@p x1, @p y1).
     template <typename T>
     void drawLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, const T &color) { _tile.drawLine(x0, y0 - _offsetY, x1, y1 - _offsetY, color); }
+    /// @brief Draw a line with the current drawing color.
+    void drawLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1) { _tile.drawLine(x0, y0 - _offsetY, x1, y1 - _offsetY); }
 
     /// @brief Fill a rectangle at virtual (@p x, @p y) of size @p w × @p h.
     template <typename T>
     void fillRect(int32_t x, int32_t y, int32_t w, int32_t h, const T &color) { _tile.fillRect(x, y - _offsetY, w, h, color); }
+    /// @brief Fill a rectangle with the current drawing color.
+    void fillRect(int32_t x, int32_t y, int32_t w, int32_t h) { _tile.fillRect(x, y - _offsetY, w, h); }
 
     /// @brief Draw a rectangle outline at virtual (@p x, @p y) of size @p w × @p h.
     template <typename T>
     void drawRect(int32_t x, int32_t y, int32_t w, int32_t h, const T &color) { _tile.drawRect(x, y - _offsetY, w, h, color); }
+    /// @brief Draw a rectangle outline with the current drawing color.
+    void drawRect(int32_t x, int32_t y, int32_t w, int32_t h) { _tile.drawRect(x, y - _offsetY, w, h); }
 
     /// @brief Fill a rounded rectangle at virtual (@p x, @p y) of size @p w × @p h.
     template <typename T>
     void fillRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, const T &color) { _tile.fillRoundRect(x, y - _offsetY, w, h, r, color); }
+    /// @brief Fill a rounded rectangle with the current drawing color.
+    void fillRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r) { _tile.fillRoundRect(x, y - _offsetY, w, h, r); }
 
     /// @brief Draw a rounded rectangle outline at virtual (@p x, @p y) of size @p w × @p h.
     template <typename T>
     void drawRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, const T &color) { _tile.drawRoundRect(x, y - _offsetY, w, h, r, color); }
+    /// @brief Draw a rounded rectangle outline with the current drawing color.
+    void drawRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r) { _tile.drawRoundRect(x, y - _offsetY, w, h, r); }
 
     /// @brief Draw a circle outline of radius @p r centered at virtual (@p x, @p y).
     template <typename T>
     void drawCircle(int32_t x, int32_t y, int32_t r, const T &color) { _tile.drawCircle(x, y - _offsetY, r, color); }
+    /// @brief Draw a circle outline with the current drawing color.
+    void drawCircle(int32_t x, int32_t y, int32_t r) { _tile.drawCircle(x, y - _offsetY, r); }
 
     /// @brief Fill a circle of radius @p r centered at virtual (@p x, @p y).
     template <typename T>
     void fillCircle(int32_t x, int32_t y, int32_t r, const T &color) { _tile.fillCircle(x, y - _offsetY, r, color); }
+    /// @brief Fill a circle with the current drawing color.
+    void fillCircle(int32_t x, int32_t y, int32_t r) { _tile.fillCircle(x, y - _offsetY, r); }
 
     /// @brief Draw an ellipse outline centered at virtual (@p x, @p y).
     template <typename T>
     void drawEllipse(int32_t x, int32_t y, int32_t rx, int32_t ry, const T &color) { _tile.drawEllipse(x, y - _offsetY, rx, ry, color); }
+    /// @brief Draw an ellipse outline with the current drawing color.
+    void drawEllipse(int32_t x, int32_t y, int32_t rx, int32_t ry) { _tile.drawEllipse(x, y - _offsetY, rx, ry); }
 
     /// @brief Fill an ellipse centered at virtual (@p x, @p y).
     template <typename T>
     void fillEllipse(int32_t x, int32_t y, int32_t rx, int32_t ry, const T &color) { _tile.fillEllipse(x, y - _offsetY, rx, ry, color); }
+    /// @brief Fill an ellipse with the current drawing color.
+    void fillEllipse(int32_t x, int32_t y, int32_t rx, int32_t ry) { _tile.fillEllipse(x, y - _offsetY, rx, ry); }
 
     /// @brief Draw a triangle through virtual points (@p x0,@p y0), (@p x1,@p y1), (@p x2,@p y2).
     template <typename T>
     void drawTriangle(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2, const T &color) { _tile.drawTriangle(x0, y0 - _offsetY, x1, y1 - _offsetY, x2, y2 - _offsetY, color); }
+    /// @brief Draw a triangle with the current drawing color.
+    void drawTriangle(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2) { _tile.drawTriangle(x0, y0 - _offsetY, x1, y1 - _offsetY, x2, y2 - _offsetY); }
 
     /// @brief Fill a triangle through virtual points (@p x0,@p y0), (@p x1,@p y1), (@p x2,@p y2).
     template <typename T>
     void fillTriangle(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2, const T &color) { _tile.fillTriangle(x0, y0 - _offsetY, x1, y1 - _offsetY, x2, y2 - _offsetY, color); }
+    /// @brief Fill a triangle with the current drawing color.
+    void fillTriangle(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2) { _tile.fillTriangle(x0, y0 - _offsetY, x1, y1 - _offsetY, x2, y2 - _offsetY); }
 
     /// @brief Draw a quadratic Bezier curve through virtual points.
     template <typename T>
@@ -143,6 +190,36 @@ public:
     /// @brief Fill a circular arc centered at virtual (@p x, @p y).
     template <typename T>
     void fillArc(int32_t x, int32_t y, int32_t r0, int32_t r1, float angle0, float angle1, const T &color) { _tile.fillArc(x, y - _offsetY, r0, r1, angle0, angle1, color); }
+
+    /// @brief Draw a circle corner helper using the current drawing color.
+    void drawCircleHelper(int32_t x, int32_t y, int32_t r, uint_fast8_t cornername) { _tile.drawCircleHelper(x, y - _offsetY, r, cornername); }
+    /// @brief Draw a circle corner helper.
+    template <typename T>
+    void drawCircleHelper(int32_t x, int32_t y, int32_t r, uint_fast8_t cornername, const T &color) { _tile.drawCircleHelper(x, y - _offsetY, r, cornername, color); }
+    /// @brief Fill a circle corner helper using the current drawing color.
+    void fillCircleHelper(int32_t x, int32_t y, int32_t r, uint_fast8_t corners, int32_t delta) { _tile.fillCircleHelper(x, y - _offsetY, r, corners, delta); }
+    /// @brief Fill a circle corner helper.
+    template <typename T>
+    void fillCircleHelper(int32_t x, int32_t y, int32_t r, uint_fast8_t corners, int32_t delta, const T &color) { _tile.fillCircleHelper(x, y - _offsetY, r, corners, delta, color); }
+
+    /// @brief Set the pivot point in virtual coordinates.
+    void setPivot(float x, float y) { _tile.setPivot(x, y - _offsetY); }
+    /// @brief Current pivot X.
+    float getPivotX(void) const { return _tile.getPivotX(); }
+    /// @brief Current pivot Y in virtual coordinates.
+    float getPivotY(void) const { return _tile.getPivotY() + _offsetY; }
+
+    /// @brief Create a LovyanGFX gradient color table from an array.
+    template <const uint32_t N>
+    const lgfx::v1::colors_t createGradient(const lgfx::v1::rgb888_t (&colors)[N]) { return _tile.createGradient(colors); }
+    /// @brief Create a LovyanGFX gradient color table from a pointer/count pair.
+    const lgfx::v1::colors_t createGradient(const lgfx::v1::rgb888_t *colors, const uint32_t count) { return _tile.createGradient(colors, count); }
+    /// @brief Map a scalar to a gradient color.
+    template <typename T = lgfx::v1::rgb888_t>
+    T mapGradient(float val, float min, float max, const lgfx::v1::colors_t gradient) { return _tile.mapGradient<T>(val, min, max, gradient); }
+    /// @brief Map a scalar to a gradient color from a raw RGB888 color table.
+    template <typename T = lgfx::v1::rgb888_t>
+    T mapGradient(float val, float min, double max, const lgfx::v1::rgb888_t *colors, uint32_t count) { return _tile.mapGradient<T>(val, min, max, colors, count); }
 
     /// @brief Draw a horizontal gradient line from virtual (@p x, @p y).
     template <typename T>
@@ -274,6 +351,10 @@ public:
     /// @note `print`/`println`/`printf` then advance the cursor and reproduce
     ///       deterministically across tiles.
     void setCursor(int32_t x, int32_t y) { _tile.setCursor(x, y - _offsetY); }
+    /// @brief Set the text cursor and built-in font.
+    void setCursor(int32_t x, int32_t y, uint8_t font) { _tile.setCursor(x, y - _offsetY, font); }
+    /// @brief Set the text cursor and font pointer.
+    void setCursor(int32_t x, int32_t y, const lgfx::v1::IFont *font) { _tile.setCursor(x, y - _offsetY, font); }
     /// @brief Current cursor X (virtual coordinate).
     int32_t getCursorX(void) { return _tile.getCursorX(); }
     /// @brief Current cursor Y (virtual coordinate — offset added back).
@@ -305,6 +386,12 @@ public:
     uint32_t getTextPadding(void) const { return _tile.getTextPadding(); }
     /// @brief Enable/disable cursor wrapping in X/Y directions.
     void setTextWrap(bool wrapX, bool wrapY = false) { _tile.setTextWrap(wrapX, wrapY); }
+    /// @brief Enable/disable text auto-scroll. See limitations for tile-boundary behavior.
+    void setTextScroll(bool scroll) { _tile.setTextScroll(scroll); }
+    /// @brief Set the emoji drawing callback.
+    void setEmojiCallback(lgfx::v1::emoji_draw_cb_t cb) { _tile.setEmojiCallback(cb); }
+    /// @brief Current emoji drawing callback.
+    lgfx::v1::emoji_draw_cb_t getEmojiCallback(void) const { return _tile.getEmojiCallback(); }
     /// @brief Set the whole LovyanGFX text style.
     void setTextStyle(const lgfx::v1::TextStyle &style) { _tile.setTextStyle(style); }
     /// @brief Current LovyanGFX text style.
@@ -314,6 +401,12 @@ public:
     void setFont(const F &font) { _tile.setFont(font); }
     /// @brief Set the current built-in text font by number.
     void setTextFont(uint8_t font) { _tile.setTextFont(font); }
+    /// @brief Set the current text font by pointer.
+    void setTextFont(const lgfx::v1::IFont *font) { _tile.setTextFont(font); }
+    /// @brief Deprecated LovyanGFX-compatible free-font setter.
+    void setFreeFont(const lgfx::v1::IFont *font = nullptr) { _tile.setFreeFont(font); }
+    /// @brief Current font pointer.
+    const lgfx::v1::IFont *getFont(void) const { return _tile.getFont(); }
     /// @brief Current built-in text font number when available.
     uint_fast8_t getTextFont(void) const { return _tile.getTextFont(); }
     /// @brief Current font height in pixels.

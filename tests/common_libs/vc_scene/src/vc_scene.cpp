@@ -40,7 +40,9 @@ void drawVcScene(LGFXVirtualCanvas &g)
     const int s = (W < H ? W : H);
 
     g.fillScreen(TFT_NAVY);
+    g.setColor(TFT_WHITE);
     g.drawRect(0, 0, W, H, TFT_WHITE);
+    g.drawRect(2, 2, W - 4, H - 4);
     g.fillRect(W / 4, H / 4, W / 2, H / 2, TFT_RED);
     g.fillCircle(W / 2, H / 2, s / 6, TFT_YELLOW);
     g.drawCircle(W / 2, H / 2, s / 5, TFT_GREEN);
@@ -52,6 +54,10 @@ void drawVcScene(LGFXVirtualCanvas &g)
     g.drawArc(W - 42, 42, 22, 14, 30, 300, TFT_YELLOW);
     g.fillArc(W - 42, 42, 12, 6, 210, 330, TFT_CYAN);
     g.drawEllipseArc(42, H - 42, 8, 20, 14, 28, 20, 320, TFT_PINK);
+    g.setColor(0, 255, 0);
+    g.drawCircleHelper(78, 50, 10, 1);
+    g.fillCircleHelper(96, 50, 10, 2, 4);
+    g.setPivot(W / 2, H / 2);
     g.drawGradientLine(4, H / 2 + 8, W - 4, H / 2 + 18, TFT_RED, TFT_BLUE);
     g.fillGradientRect(8, H / 2 + 24, 42, 16, TFT_GREEN, TFT_BLACK);
     g.drawSmoothLine(54, H / 2 + 32, W / 2 - 8, H / 2 + 12, TFT_WHITE);
@@ -68,6 +74,7 @@ void drawVcScene(LGFXVirtualCanvas &g)
     g.setTextSize(1, 1);
     g.setTextPadding(0);
     g.setTextWrap(false);
+    g.setTextScroll(false);
     g.setCursor(6, 6);
     g.printf("%dx%d", W, H);
     g.drawString("VirtualCanvas", 6, H - 20);
