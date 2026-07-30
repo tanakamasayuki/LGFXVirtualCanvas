@@ -18,6 +18,7 @@ Automated test suite for LGFXVirtualCanvas.
 - `memory/` — `setMemoryLimit` tile-height math and allocation-failure semantics (no fallback; `begin()`/`render()` return `false`).
 - `pushimage/` — `pushImage` is split-invariant across tile boundaries.
 - `sprite/` — `LGFXVirtualSprite`: tiling correctness (incl. partial last tile), region containment, movable position.
+- `diff/` — Diff transfer (SPEC §21): output identical with diffing off vs on, zero transfer for an unchanged frame, only the changed tiles otherwise, `invalidate()`, sprite-move invalidation, `Off` allocates nothing.
 
 **Tier 2 — cross-library build + minimal parity:**
 

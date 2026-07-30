@@ -18,6 +18,7 @@ LGFXVirtualCanvas の自動テストスイート。
 - `memory/` — `setMemoryLimit` のタイル高算出と確保失敗の扱い（フォールバック無し・`begin()`/`render()` が `false`）
 - `pushimage/` — `pushImage` がタイル境界を跨いでも split 不変
 - `sprite/` — `LGFXVirtualSprite`：タイル分割の正しさ（端数タイル含む）・領域外不可侵・位置移動
+- `diff/` — 差分転送（SPEC §21）：差分の有無で出力一致・未変化フレームで転送 0・変化タイルのみ転送・`invalidate()`・スプライト移動での無効化・`Off` は確保 0
 
 **Tier 2 — クロスライブラリ ビルド＋最小 parity:**
 

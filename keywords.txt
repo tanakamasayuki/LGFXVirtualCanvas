@@ -1,0 +1,61 @@
+#######################################
+# Syntax Coloring Map For LGFXVirtualCanvas
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+LGFXVirtualScreen	KEYWORD1
+LGFXVirtualSprite	KEYWORD1
+LGFXVirtualCanvas	KEYWORD1
+LGFXVirtualDiffMode	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+begin	KEYWORD2
+render	KEYWORD2
+isReady	KEYWORD2
+setPosition	KEYWORD2
+setMemoryLimit	KEYWORD2
+setSplitCount	KEYWORD2
+setTileHeight	KEYWORD2
+setBackgroundColor	KEYWORD2
+setAutoClear	KEYWORD2
+setDoubleBuffer	KEYWORD2
+doubleBuffer	KEYWORD2
+setDiffMode	KEYWORD2
+diffMode	KEYWORD2
+invalidate	KEYWORD2
+diffMemoryUsage	KEYWORD2
+diffPushedPixels	KEYWORD2
+diffTotalPixels	KEYWORD2
+tileCount	KEYWORD2
+tileHeight	KEYWORD2
+fillScreen	KEYWORD2
+drawPixel	KEYWORD2
+drawLine	KEYWORD2
+drawFastHLine	KEYWORD2
+drawFastVLine	KEYWORD2
+fillRect	KEYWORD2
+drawRect	KEYWORD2
+drawCircle	KEYWORD2
+fillCircle	KEYWORD2
+pushImage	KEYWORD2
+setCursor	KEYWORD2
+getCursorX	KEYWORD2
+getCursorY	KEYWORD2
+setTextColor	KEYWORD2
+setTextSize	KEYWORD2
+setTextDatum	KEYWORD2
+drawString	KEYWORD2
+drawCentreString	KEYWORD2
+drawRightString	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
+DEFAULT_TILE_BYTES	LITERAL1

@@ -17,6 +17,7 @@ Key decisions settled so far:
 - **Clipping is automatically safe via the sprite's standard per-pixel clip** (out-of-range drawing simply disappears).
 - **Each tile is cleared to a background color before draw (auto-clear, default ON).** The background color is configurable (default: black). Undrawn pixels become deterministic (the background color) so the result is identical regardless of split count. Disable with `setAutoClear(false)`.
 - **Two managers**: `LGFXVirtualScreen` (whole panel) and `LGFXVirtualSprite` (a placed sub-region of any size = an internally-tiled sprite, local coordinates). Both share the internal tiling engine and hand your draw function the same `LGFXVirtualCanvas`; only the transfer target (full panel vs a placed rectangle) differs. See §7.1.
+- **Diff transfer is optional and disabled by default.** `setDiffMode(LGFXVirtualDiffMode::Tile)` skips transferring tiles unchanged since the previous frame. Granularity is whole tiles only (finer granularity within a tile is a future extension). Only transfer is reduced — draw cost is unchanged and hash computation is added. See §21.
 
 The rationale (especially why a dedicated concrete class) is in §6.
 
@@ -478,6 +479,7 @@ Each case verifies pixel equality across several splits (e.g. 1/2/3/5/7).
 | T1-10 | random fuzz | generate shape sequences from a seed; equal across splits (log the seed for reproducibility) |
 | T1-11 | animation | run a sequence of frames; each frame split-invariant |
 | T1-12 | pushImage | split-invariant with clip only (overhangs, boundary straddle, off-screen). Verified by experiment; supported (§9.2) |
+| T1-13 | diff transfer | output identical with diffing off vs on (i.e. it stays a transfer optimization); zero transfer for an unchanged frame, only the changed tiles otherwise, `invalidate()` behaviour, invalidation on `LGFXVirtualSprite` move, `Off` allocates nothing (§21.9) |
 
 ### 13.5 Shared rules
 
@@ -565,7 +567,8 @@ The following are not required in the initial stage:
 
 - Full coverage of the entire LGFX / M5GFX API
 - Tiling in arbitrary directions (vertical only)
-- Partial-update optimization
+- Diff-transfer granularity finer than a whole tile (per scanline, per grid block; diff transfer itself is specified in §21, refining its granularity is a future extension — §21.8)
+- Library-side update-area specification and per-tile draw skipping (diff transfer reduces only transfer; redrawing a limited rectangle is served by `LGFXVirtualSprite`, §7.1 — see §21.1)
 - Full recording of drawing commands
 - A retained-mode UI framework
 - An automatic layout engine
@@ -586,6 +589,185 @@ The minimum viable version satisfies:
 - Basic shapes and text rendering work.
 - The result is identical regardless of split count (the full render = split:1 vs tiled-render PNG comparison test passes).
 - Testable on GitHub Actions.
+
+## 21. Diff transfer (partial-update optimization)
+
+An optional feature that skips transferring tiles unchanged since the previous frame. **It is disabled by default**, and until it is enabled it costs neither memory nor CPU.
+
+### 21.1 Goal and deliberate limits
+
+On a Full-HD-class panel a full-screen framebuffer does not fit, so this library's approach (tiled rendering through a small tile buffer) is the premise. On top of that, this feature is positioned as a **deliberately modest optimization**: "transferring the whole screen every frame is wasteful; any reduction is a win." It is not a strict minimal-diff engine.
+
+- Only **transfer** is reduced. The draw callback still runs for every tile, and hash computation is added on top. A draw-bound configuration sees no benefit (the draw-bound vs transfer-bound discussion in §10.6 applies unchanged).
+- **Specifying a fine-grained update area is not this library's responsibility.** "Redraw only this rectangle and transfer all of it" is already possible with `LGFXVirtualSprite` (§7.1), just in sprite-local coordinates. Diff transfer is the lazy alternative for when you would rather not build that.
+- Sizes are budgeted assuming **no PSRAM**. A hash table comparable in size to the tile buffer would defeat the purpose.
+
+### 21.2 Granularity: whole tiles only
+
+The diff unit is **one tile**. Finer granularity within a tile (per scanline, per grid block) is a future extension (§21.8) and is not part of the initial release.
+
+Why whole tiles suffice:
+
+Tile height is derived from the internal-RAM budget, so it automatically shrinks on large panels. At 1920×1080 / 16bpp:
+
+| Budget per buffer | Double-buffered total | tileH | Tiles | Tile-level granularity |
+|---|---|---|---|---|
+| 19 KB (default) | 38 KB | 5 rows | 216 | 1/216 of the screen |
+| 64 KB | 128 KB | 17 rows | 64 | 1/64 of the screen |
+| 128 KB | 256 KB | 34 rows | 32 | 1/32 of the screen |
+
+**The smaller the tile buffer, the finer tile-level granularity becomes.** So exactly when a framebuffer does not fit — the situation where this feature is wanted — tile granularity is already fine enough.
+
+Moreover, **hash cost does not depend on granularity** (every granularity scans all pixels once). Going finer than a tile buys only a higher skip ratio at the same cost. Conversely, a configuration where whole-tile diffing does not pay off will not pay off at a finer granularity either. Specifying tile granularity alone first is what makes it possible to **validate the usefulness of the feature itself at minimum cost**.
+
+Break-even estimate (1920×1080 / 16bpp = 4.1 MB per frame):
+
+- Hash computation: about 13 ms (at 240 MHz; §21.4)
+- Full-screen transfer: about 830 ms over SPI at 40 MHz, about 220 ms over a fast USB link (150 Mbps effective)
+- → **skipping 20 % already returns more than 3× the cost of hashing**
+
+On a transfer path that is fast enough (e.g. parallel RGB) the hash cost becomes relatively heavy. That is precisely why the default is disabled and observation APIs (§21.3) are provided so the effect can be measured.
+
+### 21.3 API
+
+```cpp
+/// Diff-transfer granularity. Row / Grid / Auto may be added later (§21.8).
+enum class LGFXVirtualDiffMode : uint8_t
+{
+    Off,   ///< No diffing (default). No hash table is allocated.
+    Tile,  ///< Per tile. Skips transferring tiles unchanged since the previous frame.
+};
+
+// LGFXVirtualTiledBase (shared by LGFXVirtualScreen / LGFXVirtualSprite)
+void setDiffMode(LGFXVirtualDiffMode mode);   // default Off
+LGFXVirtualDiffMode diffMode(void) const;
+
+void invalidate(void);                        // §21.5
+size_t diffMemoryUsage(void) const;           // hash table size in bytes (0 when Off)
+
+// Observation (result of the last render())
+uint32_t diffPushedPixels(void) const;
+uint32_t diffTotalPixels(void) const;
+```
+
+- The type is named **`LGFXVirtualDiffMode`** to match the existing global names (`LGFXVirtualCanvas` / `LGFXVirtualScreen` / `LGFXVirtualSprite`) and to avoid clashing with other libraries. Values are scoped by `enum class`, so they are written as `LGFXVirtualDiffMode::Tile`. `Off` is used instead of `None` (which may be a macro in some environments, and `Off` matches the vocabulary of the internal `DBMode { Auto, Off, On }`).
+- **No separate enable/disable flag such as `setDiffUpdate(bool)`.** Having both a bool and a granularity enum means two switches and admits unexplainable states like "disabled but Row granularity". There is one source of truth.
+- `setDiffMode()` raises the reallocation flag like the other configuration setters and takes effect on the next `render()` (§10.2). Setting `Off` frees the hash table, so the default really does cost nothing.
+- The hash table is allocated **in internal RAM** (it is scanned in full every frame, so PSRAM placement gains little). If allocation fails, `begin()` returns `false` per §10.3. **There is no silent fallback to diffing disabled.**
+
+### 21.4 Hash
+
+**8 bytes per tile: a 32-bit FNV-1a run in two lanes (even words / odd words).**
+
+- This keeps **the same number of multiplies as the 32-bit version while the state becomes 64-bit**. The dependency chain splits in two, which if anything helps the pipeline. Effectively no extra CPU cost for a 2^-64 collision probability.
+- Memory is 1.7 KB at 1920×1080 with the default budget (216 tiles) — harmless next to a 38 KB tile buffer.
+- Hash width is not visible through the API (only the `diffMemoryUsage()` number changes), so it is a **reversible decision that can be changed later**. If RAM gets tight it can drop to 4 bytes (one lane).
+
+Rationale for the width, including the failure mode:
+
+A collision means "changed but not transferred". **The stale image then persists until that tile changes again.** An animating region heals itself on the next frame, but the **worst case is content that changes once and then goes static** (a clock going 08:59→09:00 and then sitting still for a minute), which is entirely ordinary in a UI.
+
+- **2 bytes is rejected.** 2^-16 = 1/65536. With hundreds to thousands of comparisons per second this shows up roughly once every 100 seconds.
+- **4 bytes is practically sufficient** — roughly once every few tens of days at tile granularity.
+- **8 bytes is nearly free** (above). It also removes the need for a self-healing mechanism (force-transferring a rotating subset of tiles every frame). Dropping one mechanism from the spec and the implementation is the deciding factor.
+
+Choice of function:
+
+- The ESP32 ROM `crc32_le` is table-driven at about 8 cycles/byte — out of the question for 4.1 MB.
+- FNV-1a (`h = (h ^ w) * 16777619`) is load + xor + mul, about 3 cycles/word. It is **position-dependent**, so reordered or shifted content is detected (a plain XOR or additive checksum is insensitive to order and unsuitable).
+- At tile granularity the tile buffer is scanned strictly sequentially, so the estimate above holds directly.
+- **At 24bpp the byte count of a row is not a multiple of 4. The trailing bytes must not be skipped** (skipping them yields the worst failure mode: changes that are never detected).
+
+### 21.5 Invalidating the hash (automatic and manual)
+
+Diff transfer relies on "not transferring = the panel still holds the previous image". When that premise breaks, the hash must be discarded.
+
+#### Automatic invalidation
+
+One general rule:
+
+> **Any operation that raises the reallocation flag (§10.2) also discards the hash.**
+
+That automatically covers `begin()`, the first `render()`, a change of tileH / tile count, and changes to `setMemoryLimit()` / `setSplitCount()` / `setTileHeight()` / `setDoubleBuffer()` / `setDiffMode()`. In addition, err on the safe side and invalidate on:
+
+- a change to `setBackgroundColor()` / `setAutoClear()`
+- a position change of an `LGFXVirtualSprite` (the backdrop at the new location is a different image)
+- **a change in the panel's rotation / width / height / colorDepth, compared against the previous values on every `render()`.** That is a handful of integer comparisons — essentially free — and it catches the most common "the user touched the panel" case for nothing.
+
+Combining with `setAutoClear(false)` is fine: the hash is taken over the final pixel content about to be transferred, so leftovers from a previous tile in the buffer do not affect correctness.
+
+#### What cannot be detected automatically (why a manual call is needed)
+
+- the user drew directly on the panel via `lcd.fillRect()` or similar
+- another `LGFXVirtualScreen` / `LGFXVirtualSprite` overlapped and overwrote the area
+- panel sleep / reset / re-init lost the GRAM contents
+- **a USB display reconnected or the link dropped and the receiver lost the image** (realistic for the main intended use case of this feature)
+
+#### Manual API: `invalidate()`
+
+The name states the meaning directly: "the panel's current content can no longer be trusted". It is a safe no-op when diffing is disabled, so it can be called unconditionally without regard to the mode. The contract fits in one sentence:
+
+> **Call `invalidate()` whenever anything other than this object has touched the screen.**
+
+`clearDiffCache()` would be more literal, but `invalidate()` still reads correctly if the pre-draw seam (§21.8) is addressed later, so `invalidate()` is chosen. A rectangle form, `invalidateRect()`, is a pure addition and is left as a future extension.
+
+#### Representing the invalid state (implementation policy)
+
+The invalid state must **not** be represented by a sentinel hash value. If sentinel S is stored and the rule is "transfer when it differs from S", then content whose hash happens to equal S is not transferred — and that happens exactly at the moment the user explicitly asked for a refresh, which is the wrong place to have a hole.
+
+The initial release uses a single surface-wide boolean (the simplest thing). When `invalidateRect()` is introduced, promote it to a one-bit-per-tile bitmap (27 bytes even for 216 tiles).
+
+### 21.6 How partial transfer is performed
+
+Transfer is unified into one form: **narrow the clip rectangle, then `pushSprite()`.**
+
+Confirmed against LovyanGFX 1.2.21: `LGFX_Sprite::push_sprite()` → `LGFXBase::pushImage()` adjusts `dw` / `dh` and `param->src_x32` / `src_y` to the clip rectangle before calling `_panel->writeImage()` (`LGFXBase.cpp:1425-1445`). Therefore **narrowing the clip rectangle means only the intersection is actually sent to the panel**, and there is no need to build a `pixelcopy_t` by hand.
+
+- `startWrite()` / `endWrite()` are reference-counted, so even multiple pushes for one tile keep the bus transaction as a single one (preserving the §10.4 policy).
+- With a single buffer, `waitDMA()` is done once, after that tile's last transfer (§10.5).
+- For a skipped tile, neither `pushSprite()` nor `waitDMA()` is performed.
+
+### 21.7 Invariants
+
+Granularity and implementation may change later, but the following are fixed as specification; changing them later would break existing users.
+
+1. **The `invalidate()` contract (§21.5).** Granularity can change without affecting anybody, but adding "you must call `invalidate()` after drawing directly" later would leave already-written user code silently broken.
+2. **The enable API is a single granularity enum (§21.3).** No coexisting boolean flag.
+3. **Diff transfer never changes the tile geometry (tileH / tile count).** A future granularity that groups rows within a tile will tempt rounding tileH, but allowing that would make the meaning of `setMemoryLimit()` / `setSplitCount()` depend on whether diffing is on. **When they do not fit, adjust the diff-side parameter instead.**
+4. **Output pixels never change.** Diff transfer is strictly a transfer optimization. This is what lets the same PNG-equality testing as §13.2 guarantee it, and what makes granularity freely changeable later.
+
+### 21.8 Future extension points
+
+The tile render loop (§10.4) has exactly two seams, and they are orthogonal.
+
+1. **Before draw**: whether to draw this tile at all, and with what clip → a future "update area" specification and per-tile draw skipping
+2. **After draw**: what to transfer out of the tile just drawn → diff transfer (at any granularity)
+
+**The initial release addresses only 2 and does not touch 1.** When 1 is addressed later, the key point is that applying `LGFX_Sprite::setClipRect()` to the tile buffer **also reduces draw cost** (diff transfer can only ever reduce transfer).
+
+Implement 2 in a shape that allows finer granularity later:
+
+- Express the transfer decision as a **list of rectangles** (initially either zero, or one covering the whole tile). A boolean would force a rewrite when granularity is refined.
+- Hold hash state as an **array indexed by (tile index, block index)** (initially one block per tile). Refining granularity then only changes the block count.
+
+Candidates for later addition (all pure additions):
+
+- `LGFXVirtualDiffMode::Row` (full-width scanlines) / `Grid` (n columns) / `Auto` (granularity chosen from tileH)
+- rectangle shaping: vertical merging, bridging small gaps, a whole-tile transfer threshold
+- `invalidateRect()`
+- the pre-draw seam (update-area specification, per-tile draw skipping)
+- tuning for a transfer layer with run-length compression. The judgement is expected to point consistently at "larger blocks, fewer rectangles, full width where possible" (row-wise encoding has its runs cut short by partial-width rectangles). But content that compresses well is already cheap to transfer, so the gain from diffing is correspondingly smaller — decide by measurement.
+- rectangular render tiles (splitting along columns). Not needed until 4K / high color depth becomes a requirement. Tile count is `area / memory limit` regardless of shape, and full-width bands are the best shape for contiguous transfer, so this is a loss for transfer efficiency.
+- strict diffing premised on PSRAM (keeping a real previous-frame buffer)
+
+### 21.9 Test policy
+
+Rides on the framework in §13.
+
+- **Output invariance (most important)**: draw the same two frames with diffing disabled and enabled, and the second PNG must match. The host panel retains its framebuffer, so "the part that was not transferred is correctly still the previous frame's image" is verified directly. Same idea as §13.2's "the result is identical regardless of split count".
+- **Skip volume**: draw identical content twice → `diffPushedPixels() == 0`. Change one tile → only that tile's worth.
+- **Boundary conditions**: `height % tileH != 0`, a single-tile configuration, after `LGFXVirtualSprite::setPosition()` moves, and color depths 8bpp / 24bpp (the trailing bytes of §21.4).
+- **Invalidation**: after drawing directly on the panel, both that the difference persists without `invalidate()` (i.e. behaves as specified) and that `invalidate()` restores it.
 
 ## Appendix: LGFXBase → `LGFXVirtualCanvas` mapping (table)
 

@@ -1,6 +1,14 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+- (EN) Add diff transfer: `setDiffMode(LGFXVirtualDiffMode::Tile)` skips transferring tiles whose content is unchanged since the previous render, plus `diffMode()`, `invalidate()`, `diffMemoryUsage()`, `diffPushedPixels()`, `diffTotalPixels()`. Disabled by default (`Off` allocates nothing). Whole-tile granularity, 8 bytes of hash per tile (32-bit FNV-1a in two interleaved lanes). Reduces transfer only — drawing is unchanged and hashing is added on top.
+- (JA) 差分転送を追加：`setDiffMode(LGFXVirtualDiffMode::Tile)` で前回描画から内容が変化していないタイルの転送を省略。あわせて `diffMode()`, `invalidate()`, `diffMemoryUsage()`, `diffPushedPixels()`, `diffTotalPixels()` を追加。既定は無効（`Off` では確保も行わない）。粒度はタイル単位、ハッシュは 1 タイル 8 バイト（32bit FNV-1a を 2 レーン交互）。削減対象は転送のみで、描画は減らずハッシュ計算が増える。
+- (EN) The panel content is assumed to persist where nothing was transferred. Reallocation, config changes, an `LGFXVirtualSprite` position change, and a panel rotation/size/color-depth change invalidate automatically; anything else drawing on the panel requires `invalidate()`.
+- (JA) 転送を省略した領域はパネルが前回の絵を保持している前提。再確保・設定変更・`LGFXVirtualSprite` の位置変更・パネルの回転/サイズ/色深度の変化は自動で無効化するが、それ以外がパネルに描画した場合は `invalidate()` の呼び出しが必要。
+- (EN) Double-buffer alternation now advances per transfer instead of per tile, so a skipped tile cannot let the next-but-one tile overwrite a buffer whose DMA is still in flight.
+- (JA) ダブルバッファの切り替えをタイルごとではなく転送ごとに進めるようにした。これによりタイルをスキップしても、DMA 転送中のバッファを 2 つ先のタイルが上書きすることがない。
+- (EN) Specify diff transfer in SPEC §21 (goal and deliberate limits, granularity rationale, hash width, the `invalidate()` contract, invariants, extension seams, test policy) and add Tier 1 case T1-13 plus the `tests/diff/` suite and the `DiffTransfer` example.
+- (JA) 差分転送を SPEC §21 として規定（目標設定と割り切り・粒度の根拠・ハッシュ幅・`invalidate()` の契約・不変条件・拡張点・テスト方針）。Tier 1 ケース T1-13、`tests/diff/` テスト、`DiffTransfer` サンプルを追加。
 
 ## 1.1.0
 - (EN) Expand `LGFXVirtualCanvas` API coverage to the set of LovyanGFX/M5GFX wrappers that can be safely provided on a tiled virtual surface: current-color drawing overloads, Bezier/arc/helper shapes, gradients, smooth/wide/spot drawing, bitmap and decoded image helpers, QR code rendering, grayscale/alpha image helpers, image rotate/zoom helpers, readback, palette/state utilities, pivot/gradient helpers, and extended text/font APIs.

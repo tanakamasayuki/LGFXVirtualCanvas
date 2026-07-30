@@ -11,7 +11,7 @@ tools/cache/
 .vscode/
 arduino_secrets.h
 *.bat
-*.txt
+#*.txt
 #sketch.yaml
 temp
 build/

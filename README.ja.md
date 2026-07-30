@@ -160,6 +160,41 @@ view.render(drawIcon, x, y);      // 位置を変えて描画（現在位置も�
 転送・最終端数タイル・画面端のはみ出しは全部ライブラリ側。`LGFXVirtualScreen` は
 「画面全体」という特殊ケースで、両者は同じタイル分割エンジンを共有します。
 
+## 差分転送で転送量を減らす
+
+前フレームから変化していないタイルの転送を省略できます。大きくて転送の遅いパネル
+（フルHD の USB ディスプレイなど）向けの機能です。**既定は無効**で、有効にしない
+限りメモリも CPU も一切使いません。
+
+```cpp
+screen.setDiffMode(LGFXVirtualDiffMode::Tile);
+```
+
+各タイルは draw 後にハッシュ（1タイル 8 バイト）を取り、前回と一致したら転送を
+飛ばします。**出力画素は一切変わりません** ── 転送だけの最適化です。
+
+減るのは**転送だけ**です。描画コールバックは従来どおり全タイルで走り、さらに
+ハッシュ計算（タイルバッファ1回の線形走査）が増えます。描画律速の構成では効果が
+出ないどころか少し遅くなるので、効いているかは実測してください：
+
+```cpp
+screen.render(drawScene);
+Serial.printf("%u / %u px 転送\n",
+              (unsigned)screen.diffPushedPixels(),
+              (unsigned)screen.diffTotalPixels());
+```
+
+> ⚠️ **他が画面に触ったら `invalidate()` を呼ぶ。** 転送を省略できるのは「送らな
+> かった場所にはまだ前回の絵が残っている」前提が成り立つ間だけです。再確保・設定
+> 変更・スプライトの移動・パネルの回転/サイズ/色深度の変化は自動で検知しますが、
+> それ以外は検知できません。`lcd.fillRect()` などで直接描いた／別の面を重ねた／
+> パネルをスリープ・リセットした／USB ディスプレイが再接続した ── こうしたときは
+> `screen.invalidate()` を呼んでください（次の `render()` が全タイルを転送します）。
+
+粒度はタイル単位のみです。タイル高はメモリ予算で決まるため大きなパネルでは自動的に
+細かくなります（フルHD / 16bpp・既定予算ならタイル高 5 行＝画面の 1/216）。
+詳細は [SPEC.ja.md §21](SPEC.ja.md) を参照。
+
 ## API
 
 ### `LGFXVirtualScreen` — マネージャ
@@ -173,6 +208,11 @@ view.render(drawIcon, x, y);      // 位置を変えて描画（現在位置も�
 | `void setBackgroundColor(uint32_t color)` | auto-clear の色（既定 黒）。 |
 | `void setAutoClear(bool enable)` | draw 前に各タイルをクリア（既定 `true`）。 |
 | `void setDoubleBuffer(bool enable)` | タイルバッファを2枚使い、あるタイルの DMA 転送と次タイルの描画を重ねる（高速、タイルRAM 2倍）。既定の **auto**（2タイル以上で ON、1タイルで OFF）を上書きする。SPEC §10.5 参照。 |
+| `void setDiffMode(LGFXVirtualDiffMode mode)` | 差分転送の粒度。`Off`（既定）／`Tile`（前回と変化していないタイルの転送を省略）。転送のみ削減。SPEC §21 参照。 |
+| `LGFXVirtualDiffMode diffMode() const` | 現在の差分転送モード。 |
+| `void invalidate()` | パネルの内容が信用できなくなったことを通知（次の `render()` が全タイル転送）。自分以外が画面に触ったら呼ぶ。 |
+| `size_t diffMemoryUsage() const` | ハッシュ表のバイト数（`Off` なら 0）。 |
+| `uint32_t diffPushedPixels() const` / `uint32_t diffTotalPixels() const` | 直前の `render()` が実際に転送した画素数 ／ 差分なしなら転送していた画素数。 |
 | `bool begin()` | 今すぐ確保。失敗で `false`（フォールバック無し）。 |
 | `bool isReady() const` | 確保済みか。 |
 | `int tileCount() const` / `int tileHeight() const` | 確保後の確定ジオメトリ。 |
@@ -318,13 +358,14 @@ LovyanGFX には描画原点の平行移動が無く、プリミティブが非 
   一度だけ sprite / 画像バッファへデコードし、可能なら `pushImage` を使ってください。
 - バッファ高に依存するテキスト挙動（自動スクロール・下端折り返し）は保証外。
   基本の cursor/print/drawString は対応。
-- 部分更新 / retained mode は無し：毎フレーム全体を描き直す前提。
+- retained mode / 描画命令の記録は無し：毎フレーム全体を描き直す前提です。
+  差分転送（既定 OFF）はタイル単位で**転送だけ**を削減するもので、描画は減りません。
 
 ## サンプル
 
 [examples/](examples/) を参照：`HelloWorld`, `BouncingBall`（状態＋アニメ）,
 `MemoryBudget`（予算＋失敗処理）, `Viewport`（`LGFXVirtualSprite` 部分更新）,
-`LovyanGFX_Basic`。
+`DiffTransfer`（差分転送）, `LovyanGFX_Basic`。
 
 ## テスト
 

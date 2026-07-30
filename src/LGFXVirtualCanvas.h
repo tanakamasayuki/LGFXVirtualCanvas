@@ -36,6 +36,8 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <utility>
 
 #include "lgfxvirtualcanvas_version.h"
@@ -647,6 +649,19 @@ private:
     int32_t _virtualHeight;
 };
 
+/// @brief Diff-transfer granularity. See SPEC §21.
+///
+/// Diff transfer skips pushing tiles whose pixel content is unchanged since the
+/// previous render. It reduces **transfer only** — the draw callback still runs
+/// for every tile and hashing is added on top — so it pays off on a
+/// transfer-bound setup (a large, slow panel) and not on a draw-bound one.
+/// `Off` is the default and costs neither memory nor CPU.
+enum class LGFXVirtualDiffMode : uint8_t
+{
+    Off,  ///< No diffing (default). No hash table is allocated.
+    Tile, ///< Per tile: skip transferring tiles unchanged since the previous render.
+};
+
 /// @brief Internal vertical-tiling engine shared by LGFXVirtualScreen and
 ///        LGFXVirtualSprite. Not intended for direct use.
 ///
@@ -680,9 +695,9 @@ public:
     /// @brief Use a fixed tile @p height in pixels. 0 = unset.
     void setTileHeight(int height) { _tileHeightCfg = height; _dirty = true; }
     /// @brief Set the auto-clear background color (default black / 0).
-    void setBackgroundColor(uint32_t color) { _bgColor = color; }
+    void setBackgroundColor(uint32_t color) { _bgColor = color; _diffValid = false; }
     /// @brief Enable/disable clearing each tile before draw (default enabled). See SPEC §11.
-    void setAutoClear(bool enable) { _autoClear = enable; }
+    void setAutoClear(bool enable) { _autoClear = enable; _diffValid = false; }
     /// @brief Force double-buffering on/off, overriding the default auto mode.
     ///
     /// **Default is auto** (this setter unset): double-buffering is enabled when
@@ -702,6 +717,41 @@ public:
     /// @brief Whether double-buffering is active (resolved at begin(); false before allocation).
     bool doubleBuffer(void) const { return _doubleBuffer; }
 
+    /// @brief Set the diff-transfer granularity (default ::LGFXVirtualDiffMode::Off).
+    ///
+    /// With ::LGFXVirtualDiffMode::Tile, each tile's pixel content is hashed
+    /// after your draw callback and the transfer is skipped when the hash equals
+    /// the previous render's. Reduces **transfer only**: the draw callback still
+    /// runs for every tile, and hashing costs one linear pass over each tile
+    /// buffer. Output pixels are never affected (SPEC §21.7).
+    ///
+    /// Takes effect on the next render (the hash table is (re)allocated then, in
+    /// internal RAM; `Off` frees it). Skipping is only correct while the panel
+    /// still holds the previous image — see invalidate(). @see SPEC §21.
+    void setDiffMode(LGFXVirtualDiffMode mode) { _diffMode = mode; _dirty = true; }
+    /// @brief Current diff-transfer granularity.
+    LGFXVirtualDiffMode diffMode(void) const { return _diffMode; }
+
+    /// @brief Declare that the panel content can no longer be trusted; the next
+    ///        render transfers every tile.
+    ///
+    /// Diff transfer assumes "not transferred" means the panel still shows the
+    /// previous image. Reallocation, config changes, a sprite position change and
+    /// a panel rotation / size / color-depth change are detected automatically,
+    /// but drawing performed by anything else is not. The rule:
+    /// **call this whenever something other than this object has touched the
+    /// screen** (direct `lcd.*` drawing, an overlapping surface, panel
+    /// sleep/reset, a USB display reconnect). Safe no-op when diffing is off.
+    /// @see SPEC §21.5
+    void invalidate(void) { _diffValid = false; }
+
+    /// @brief Hash table size in bytes (0 when diffing is off / not allocated).
+    size_t diffMemoryUsage(void) const { return _diffHashBytes; }
+    /// @brief Pixels actually transferred by the last render (surface pixels).
+    uint32_t diffPushedPixels(void) const { return _diffPushedPixels; }
+    /// @brief Pixels the last render would have transferred without diffing.
+    uint32_t diffTotalPixels(void) const { return _diffTotalPixels; }
+
     /// @brief Whether the tile buffer is allocated and current.
     bool isReady(void) const { return _ready && !_dirty; }
     /// @brief Number of tiles resolved at allocation.
@@ -711,6 +761,13 @@ public:
 
 protected:
     LGFXVirtualTiledBase(LovyanGFX &panel) : _panel(&panel), _tile(&panel), _tile2(&panel) {}
+    // Non-virtual (SPEC §6.3: no virtual anywhere) and protected, so a derived
+    // object cannot be deleted through a base pointer. Frees the hash table.
+    ~LGFXVirtualTiledBase() { freeDiffHash(); }
+    // The hash table is an owned raw allocation, so copying would double-free.
+    // Nothing in this library copies a manager; make it a compile error instead.
+    LGFXVirtualTiledBase(const LGFXVirtualTiledBase &) = delete;
+    LGFXVirtualTiledBase &operator=(const LGFXVirtualTiledBase &) = delete;
 
     /// @brief Allocate the reusable tile sprite for a regionW × regionH surface.
     /// @return false on failure (no fallback — see SPEC §10.3).
@@ -760,6 +817,24 @@ protected:
                 return false; // out of RAM for the second buffer
             }
         }
+        // Diff hash table: two 32-bit lanes per tile (SPEC §21.4). Allocated last
+        // so a failure here leaves no half-allocated state behind, and reported as
+        // failure rather than silently falling back to no diffing (SPEC §10.3).
+        freeDiffHash();
+        if (_diffMode != LGFXVirtualDiffMode::Off)
+        {
+            const size_t bytes = (size_t)tileCount * 2 * sizeof(uint32_t);
+            _diffHash = (uint32_t *)malloc(bytes);
+            if (_diffHash == nullptr)
+            {
+                _tile.deleteSprite();
+                _tile2.deleteSprite();
+                _ready = false;
+                return false; // out of RAM for the hash table
+            }
+            _diffHashBytes = bytes;
+        }
+        _diffValid = false; // nothing known about the panel content yet
         _regionW = regionW;
         _regionH = regionH;
         _tileHeight = tileH;
@@ -767,6 +842,7 @@ protected:
         _doubleBuffer = wantDouble; // resolved effective mode (read by renderRegion)
         _ready = true;
         _dirty = false;
+        snapshotPanelState();
         return true;
     }
 
@@ -784,6 +860,16 @@ protected:
             if (!beginRegion(regionW, regionH))
                 return false; // not ready → draw nothing (SPEC §10.3)
         }
+        // Cheap automatic invalidation (SPEC §21.5): a rotation / size / depth
+        // change, or a moved surface, means the panel no longer holds what our
+        // hashes describe. A few integer compares; direct drawing by other code
+        // is undetectable and needs invalidate().
+        if (snapshotPanelState() || posX != _lastPosX || posY != _lastPosY)
+            _diffValid = false;
+        _lastPosX = posX;
+        _lastPosY = posY;
+        _diffPushedPixels = 0;
+        _diffTotalPixels = (uint32_t)_regionW * (uint32_t)_regionH;
         // Batch all tile transfers into one bus transaction. Drawing into the
         // tile sprite is memory-only (no bus), so only the per-tile pushSprite
         // to the panel benefits — holding one startWrite/endWrite around the
@@ -791,26 +877,54 @@ protected:
         // bus-less host backend.)
         _panel->startWrite();
         _panel->setClipRect(posX, posY, _regionW, _regionH);
+        // Double-buffer index. It advances only on an actual transfer, not per
+        // tile: the "buffer last touched two tiles ago is free" argument below
+        // rests on a push having happened in between, and a diff-skipped tile
+        // starts no DMA. Advancing per tile would let tile i+2 overwrite the
+        // buffer tile i is still being transferred from when i+1 is skipped.
+        int dbIndex = 0;
         for (int i = 0; i < _tileCount; ++i)
         {
             const int32_t offsetY = (int32_t)i * _tileHeight;
-            // Double-buffer: alternate tiles so tile i transfers (async DMA)
-            // while tile i+1 is drawn into the other buffer. The SPI bus
+            // Double-buffer: alternate transfers so one tile transfers (async
+            // DMA) while the next is drawn into the other buffer. The SPI bus
             // serializes consecutive transfers, so the buffer reused here (last
-            // touched two tiles ago) is guaranteed free of in-flight DMA.
-            LGFX_Sprite &buf = (_doubleBuffer && (i & 1)) ? _tile2 : _tile;
+            // transferred two pushes ago) is guaranteed free of in-flight DMA.
+            LGFX_Sprite &buf = (_doubleBuffer && dbIndex) ? _tile2 : _tile;
             if (_autoClear)
                 buf.fillScreen(_bgColor);
             LGFXVirtualCanvas g(buf, offsetY, _regionH);
             drawFn(g);
-            buf.pushSprite(_panel, posX, posY + offsetY);
-            // Single buffer: the same sprite is reused for the next tile, so we
-            // must not start overwriting it until this tile's DMA has finished
-            // reading it. (Without this the next fillScreen would corrupt the
-            // tile still being transferred — see SPEC §10.5.)
-            if (!_doubleBuffer)
-                _panel->waitDMA();
+            // Diff transfer (SPEC §21): hash the drawn tile and skip the push
+            // when it matches the previous render. The stored hash is updated
+            // either way, so the table always describes what the panel shows.
+            bool push = true;
+            if (_diffHash != nullptr)
+            {
+                uint32_t h[2];
+                hashTile(buf.getBuffer(), buf.bufferLength(), h);
+                uint32_t *slot = &_diffHash[(size_t)i * 2];
+                push = !_diffValid || slot[0] != h[0] || slot[1] != h[1];
+                slot[0] = h[0];
+                slot[1] = h[1];
+            }
+            if (push)
+            {
+                buf.pushSprite(_panel, posX, posY + offsetY);
+                // Rows of this tile inside the surface (the last tile may be
+                // partial); the panel clip rect discards the rest.
+                const int32_t rows = (_regionH - offsetY < _tileHeight) ? (_regionH - offsetY) : _tileHeight;
+                _diffPushedPixels += (uint32_t)_regionW * (uint32_t)rows;
+                dbIndex ^= 1;
+                // Single buffer: the same sprite is reused for the next tile, so
+                // we must not start overwriting it until this tile's DMA has
+                // finished reading it. (Without this the next fillScreen would
+                // corrupt the tile still being transferred — see SPEC §10.5.)
+                if (!_doubleBuffer)
+                    _panel->waitDMA();
+            }
         }
+        _diffValid = (_diffHash != nullptr);
         _panel->clearClipRect();
         _panel->endWrite();
         return true;
@@ -830,6 +944,62 @@ private:
         // Nothing set: derive split from the default per-tile budget so it scales
         // with surface size (small → 1 tile, full screen → several). See SPEC §10.1.
         return tileHForBudget(W, H, bits, DEFAULT_TILE_BYTES);
+    }
+
+    void freeDiffHash(void)
+    {
+        free(_diffHash);
+        _diffHash = nullptr;
+        _diffHashBytes = 0;
+        _diffValid = false;
+    }
+
+    // Record the panel attributes the hash table depends on. Returns true when
+    // any of them changed since the last call (→ caller invalidates).
+    bool snapshotPanelState(void)
+    {
+        const uint8_t rot = _panel->getRotation();
+        const int32_t pw = _panel->width();
+        const int32_t ph = _panel->height();
+        const int depth = (int)_panel->getColorDepth();
+        const bool changed = (rot != _lastRotation) || (pw != _lastPanelW) || (ph != _lastPanelH) || (depth != _lastDepth);
+        _lastRotation = rot;
+        _lastPanelW = pw;
+        _lastPanelH = ph;
+        _lastDepth = depth;
+        return changed;
+    }
+
+    // 64-bit tile hash: FNV-1a split into two lanes over even/odd 32-bit words.
+    // Two lanes cost the same number of multiplies as one 32-bit pass (the two
+    // dependency chains interleave), so 2^-64 collision odds come essentially
+    // free — which is what lets us skip a self-healing refresh mechanism.
+    // FNV is position-dependent, so shifted/reordered content is detected (a
+    // plain XOR or additive sum would not be). One linear pass over the whole
+    // buffer, so row padding and non-multiple-of-4 rows (24bpp) need no special
+    // handling; only the final <8 bytes of the buffer do. See SPEC §21.4.
+    static void hashTile(const void *data, size_t bytes, uint32_t out[2])
+    {
+        constexpr uint32_t offsetBasis = 2166136261u;
+        constexpr uint32_t prime = 16777619u;
+        const uint8_t *p = (const uint8_t *)data;
+        uint32_t h0 = offsetBasis;
+        uint32_t h1 = offsetBasis;
+        for (size_t n = bytes >> 3; n != 0; --n)
+        {
+            uint32_t w0, w1;
+            memcpy(&w0, p, sizeof(w0)); // compiles to a plain load; also safe if unaligned
+            memcpy(&w1, p + sizeof(w0), sizeof(w1));
+            p += 2 * sizeof(uint32_t);
+            h0 = (h0 ^ w0) * prime;
+            h1 = (h1 ^ w1) * prime;
+        }
+        for (size_t n = bytes & 7; n != 0; --n)
+        {
+            h0 = (h0 ^ *p++) * prime;
+        }
+        out[0] = h0;
+        out[1] = h1;
     }
 
     // Largest tile height whose row span fits @p budget bytes, clamped to H.
@@ -862,6 +1032,22 @@ protected:
     bool _autoClear = true;
     DBMode _dbMode = DBMode::Auto;
     bool _doubleBuffer = false; // resolved effective mode (set in beginRegion)
+    LGFXVirtualDiffMode _diffMode = LGFXVirtualDiffMode::Off;
+
+    // diff state (SPEC §21). _diffHash != nullptr is the "diffing is active"
+    // test; _diffValid says whether its contents describe the current panel.
+    uint32_t *_diffHash = nullptr; // 2 lanes × _tileCount, malloc'd (internal RAM)
+    size_t _diffHashBytes = 0;
+    bool _diffValid = false;
+    uint32_t _diffPushedPixels = 0;
+    uint32_t _diffTotalPixels = 0;
+    // Panel/placement attributes watched for automatic invalidation.
+    int32_t _lastPosX = 0;
+    int32_t _lastPosY = 0;
+    uint8_t _lastRotation = 0;
+    int32_t _lastPanelW = 0;
+    int32_t _lastPanelH = 0;
+    int _lastDepth = 0;
 
     // computed state
     int32_t _regionW = 0;

@@ -165,6 +165,43 @@ The library handles all transfer, including the partial last tile and any
 screen-edge overhang. `LGFXVirtualScreen` is just the special case "the whole
 panel" — both share the same tiling engine.
 
+## Cutting transfer with diff transfer
+
+Tiles unchanged since the previous frame can have their transfer skipped. This
+targets large, slow panels (a Full-HD USB display, say). It is **disabled by
+default** and costs neither memory nor CPU until you turn it on.
+
+```cpp
+screen.setDiffMode(LGFXVirtualDiffMode::Tile);
+```
+
+Each tile is hashed after your draw callback (8 bytes per tile) and the transfer
+is skipped when the hash matches the previous render. **Output pixels never
+change** — this is a transfer optimization only.
+
+Only **transfer** shrinks. The draw callback still runs for every tile, and
+hashing (one linear pass over each tile buffer) is added on top, so a draw-bound
+setup gains nothing and gets slightly slower. Measure whether it pays off:
+
+```cpp
+screen.render(drawScene);
+Serial.printf("%u / %u px transferred\n",
+              (unsigned)screen.diffPushedPixels(),
+              (unsigned)screen.diffTotalPixels());
+```
+
+> ⚠️ **Call `invalidate()` when anything else touches the screen.** Skipping is
+> only correct while "the area we did not send still shows the previous image"
+> holds. Reallocation, config changes, a sprite move, and a panel
+> rotation/size/color-depth change are detected automatically; nothing else is.
+> If you drew directly with `lcd.fillRect()`, overlapped another surface, slept
+> or reset the panel, or a USB display reconnected, call `screen.invalidate()`
+> (the next `render()` then transfers every tile).
+
+Granularity is whole tiles only. Tile height is derived from the memory budget,
+so it gets finer automatically on large panels (Full HD / 16bpp at the default
+budget gives a 5-row tile = 1/216 of the screen). See [SPEC.md §21](SPEC.md).
+
 ## API
 
 ### `LGFXVirtualScreen` — the manager
@@ -178,6 +215,11 @@ panel" — both share the same tiling engine.
 | `void setBackgroundColor(uint32_t color)` | auto-clear color (default black). |
 | `void setAutoClear(bool enable)` | Clear each tile before draw (default `true`). |
 | `void setDoubleBuffer(bool enable)` | Use two tile buffers so a tile's DMA transfer overlaps the next tile's draw (faster, 2× tile RAM). Overrides the default **auto** mode (on when ≥ 2 tiles, off for a single tile). See SPEC §10.5. |
+| `void setDiffMode(LGFXVirtualDiffMode mode)` | Diff-transfer granularity: `Off` (default) or `Tile` (skip transferring tiles unchanged since the previous render). Reduces transfer only. See SPEC §21. |
+| `LGFXVirtualDiffMode diffMode() const` | Current diff-transfer mode. |
+| `void invalidate()` | Declare that the panel content can no longer be trusted (the next `render()` transfers every tile). Call it whenever something other than this object touched the screen. |
+| `size_t diffMemoryUsage() const` | Hash table size in bytes (0 when `Off`). |
+| `uint32_t diffPushedPixels() const` / `uint32_t diffTotalPixels() const` | Pixels the last `render()` actually transferred / would have transferred without diffing. |
 | `bool begin()` | Allocate the tile buffer now. `false` on failure (no fallback). |
 | `bool isReady() const` | Whether the buffer is allocated. |
 | `int tileCount() const` / `int tileHeight() const` | Resolved geometry after allocation. |
@@ -321,13 +363,16 @@ code path proves correctness. Rationale in [SPEC.md §6](SPEC.md).
   once into a sprite/image buffer and use `pushImage` when possible.
 - Text behavior that depends on the buffer height (auto-scroll, bottom-edge
   wrap) is not guaranteed; basic cursor/print/drawString are.
-- No partial-update / retained mode: redraw the whole scene each frame.
+- No retained mode / draw-command recording: redraw the whole scene each frame.
+  Diff transfer (off by default) skips **transfer** for unchanged tiles; it does
+  not reduce drawing.
 
 ## Examples
 
 See [examples/](examples/): `HelloWorld`, `BouncingBall` (state + animation),
 `MemoryBudget` (budget + failure handling), `Viewport`
-(`LGFXVirtualSprite` partial update), `LovyanGFX_Basic`.
+(`LGFXVirtualSprite` partial update), `DiffTransfer` (diff transfer),
+`LovyanGFX_Basic`.
 
 ## Testing
 
