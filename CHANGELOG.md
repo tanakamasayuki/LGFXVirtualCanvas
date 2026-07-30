@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.2.0
 - (EN) Add diff transfer: `setDiffMode(LGFXVirtualDiffMode::Tile)` skips transferring tiles whose content is unchanged since the previous render, plus `diffMode()`, `invalidate()`, `diffMemoryUsage()`, `diffPushedPixels()`, `diffTotalPixels()`. Disabled by default (`Off` allocates nothing). Whole-tile granularity, 8 bytes of hash per tile (32-bit FNV-1a in two interleaved lanes). Reduces transfer only — drawing is unchanged and hashing is added on top.
 - (JA) 差分転送を追加：`setDiffMode(LGFXVirtualDiffMode::Tile)` で前回描画から内容が変化していないタイルの転送を省略。あわせて `diffMode()`, `invalidate()`, `diffMemoryUsage()`, `diffPushedPixels()`, `diffTotalPixels()` を追加。既定は無効（`Off` では確保も行わない）。粒度はタイル単位、ハッシュは 1 タイル 8 バイト（32bit FNV-1a を 2 レーン交互）。削減対象は転送のみで、描画は減らずハッシュ計算が増える。
 - (EN) The panel content is assumed to persist where nothing was transferred. Reallocation, config changes, an `LGFXVirtualSprite` position change, and a panel rotation/size/color-depth change invalidate automatically; anything else drawing on the panel requires `invalidate()`.
