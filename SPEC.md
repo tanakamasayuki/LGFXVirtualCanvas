@@ -430,6 +430,7 @@ One tile sprite is reused across all tiles and frames, so before a draw call the
 So **each tile is cleared to the background color before draw is called (auto-clear, default ON)**.
 
 - The default background is black. Change it with `setBackgroundColor(color)`.
+- **The color is read according to the value's C++ type**, exactly as everywhere else in LovyanGFX: `int` / `uint16_t` (the `TFT_*` constants, `color565()` results) is RGB565, `uint32_t` is RGB888. `setBackgroundColor()` is therefore a template that preserves the type and canonicalizes to RGB888 for storage — the same treatment, for the same reason, as `setTransparentColor()` (§22.4). Taking a plain `uint32_t` here was a defect: `setBackgroundColor(TFT_NAVY)` filled the tiles with RGB888 `0x00000F` instead of navy.
 - This makes **undrawn pixels always deterministic (the background color)**, so the result is identical regardless of split count even if draw does not paint every pixel.
 - Since there is no full-screen framebuffer, "preserving the previous frame (partial update)" is fundamentally impossible; redrawing everything every frame is the premise. auto-clear states that premise explicitly in the spec.
 - If the user always paints the whole screen with `fillScreen`, auto-clear is a double fill. Advanced users who want to avoid it can disable with `setAutoClear(false)` (when disabled, undrawn pixels are undefined).

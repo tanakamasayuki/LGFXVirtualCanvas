@@ -6,6 +6,7 @@ from PIL import Image, ImageChops
 
 SKETCH_DIR = Path(__file__).parent
 CASES = ["black", "navy", "off"]
+BG_CASES = ["bg565", "bg888"]
 
 
 def _open(out, case, split):
@@ -17,6 +18,7 @@ def test_autoclear(dut):
     dut.expect("PANEL", timeout=5)
     for case in CASES:
         dut.expect(f"CASE {case} done", timeout=10)
+    dut.expect("CASE bgtype done", timeout=10)
     dut.expect("TEST done", timeout=5)
 
     out = SKETCH_DIR / "output"
@@ -40,3 +42,14 @@ def test_autoclear(dut):
     assert black.getpixel((0, 0)) != navy.getpixel((0, 0)), (
         "setBackgroundColor had no visible effect on the undrawn corner"
     )
+
+    # ...and it is the color that was asked for. The reference is the panel
+    # painted with the same constant directly, so a color read with the wrong
+    # convention (RGB565 value treated as RGB888) shows up here.
+    expected = Image.open(out / "ac_bgref.png").convert("RGB").getpixel((5, 5))
+    for case in BG_CASES:
+        got = Image.open(out / f"ac_{case}.png").convert("RGB").getpixel((0, 0))
+        assert got == expected, (
+            f"{case}: auto-clear filled {got}, but the same color drawn straight "
+            f"to the panel is {expected} — setBackgroundColor() misread the value"
+        )

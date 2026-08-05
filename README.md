@@ -308,7 +308,7 @@ call `overlay.invalidate()`. See [SPEC.md §22](SPEC.md).
 | `LGFXVirtualSplitAxis splitAxis() const` | Current split axis. |
 | `void setUsePsram(bool enable)` | Allocate the tile buffer(s) in PSRAM (default off). Slower memory, no DMA (auto double-buffering turns off), falls back to internal RAM if unavailable. See SPEC §10.9. |
 | `bool usePsram() const` / `bool tileIsPsram() const` | What was requested / where the buffer actually landed. |
-| `void setBackgroundColor(uint32_t color)` | auto-clear color (default black). Not used by `renderTransparent*()`. |
+| `void setBackgroundColor(color)` | auto-clear color (default black). Read according to the value's C++ type (`TFT_*` / `int` = RGB565, `uint32_t` = RGB888). Not used by `renderTransparent*()`. |
 | `void setAutoClear(bool enable)` | Clear each tile before draw (default `true`). |
 | `void setDoubleBuffer(bool enable)` | Use two tile buffers so a tile's DMA transfer overlaps the next tile's draw (faster, 2× tile RAM). Overrides the default **auto** mode (on when ≥ 2 tiles, off for a single tile). See SPEC §10.5. |
 | `void setTransparentColor(color)` | Color `renderTransparent*()` leaves out of the transfer (default `TFT_TRANSPARENT` = RGB565 `0x0120`). Read according to the value's C++ type. See SPEC §22.4. |

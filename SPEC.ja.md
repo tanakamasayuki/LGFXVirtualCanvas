@@ -430,6 +430,7 @@ frame ≈ draw₀ + Σ max(drawᵢ₊₁, xferᵢ) + xfer_last   ≈   max(Σ描
 そこで**各タイルは draw を呼ぶ前に背景色でクリアする（auto-clear、既定 ON）**。
 
 - 背景色の既定は黒。`setBackgroundColor(color)` で変更できる。
+- **色は値の C++ 型に従って解釈される**（LovyanGFX の他の場所とまったく同じ）：`int` / `uint16_t`（`TFT_*` 定数、`color565()` の戻り値）は RGB565、`uint32_t` は RGB888。したがって `setBackgroundColor()` は型を保つテンプレートとし、保存時に RGB888 へ正規化する。`setTransparentColor()`（§22.4）と同じ理由による同じ扱いである。ここを素の `uint32_t` にしていたのは不具合で、`setBackgroundColor(TFT_NAVY)` は navy ではなく RGB888 の `0x00000F` でタイルを塗っていた。
 - これにより**未描画画素は常に背景色で決定的**になり、draw が全画素を塗らなくても分割数に依らず結果が一致する。
 - 全画面 framebuffer を持たない以上「前フレーム内容の保持（部分更新）」は原理的に不可能であり、毎フレーム全描画が前提。auto-clear はその前提を仕様として明文化したもの。
 - ユーザが常に `fillScreen` で全面を塗る場合、auto-clear は二重塗りになる。これを避けたい上級者は `setAutoClear(false)` で無効化できる（無効化時、未描画画素は不定）。

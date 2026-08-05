@@ -299,7 +299,7 @@ overlay.setTransparentColor(lcd.color565(1, 2, 3));
 | `LGFXVirtualSplitAxis splitAxis() const` | 現在の分割軸。 |
 | `void setUsePsram(bool enable)` | タイルバッファを PSRAM に確保（既定 OFF）。メモリが遅く DMA も効かない（auto のダブルバッファは OFF に）。確保できなければ内蔵RAMにフォールバック。SPEC §10.9 参照。 |
 | `bool usePsram() const` / `bool tileIsPsram() const` | 要求した値 ／ 実際に確保された場所。 |
-| `void setBackgroundColor(uint32_t color)` | auto-clear の色（既定 黒）。`renderTransparent*()` では使われない。 |
+| `void setBackgroundColor(color)` | auto-clear の色（既定 黒）。値の C++ 型に従って解釈される（`TFT_*` / `int` は RGB565、`uint32_t` は RGB888）。`renderTransparent*()` では使われない。 |
 | `void setAutoClear(bool enable)` | draw 前に各タイルをクリア（既定 `true`）。 |
 | `void setDoubleBuffer(bool enable)` | タイルバッファを2枚使い、あるタイルの DMA 転送と次タイルの描画を重ねる（高速、タイルRAM 2倍）。既定の **auto**（2タイル以上で ON、1タイルで OFF）を上書きする。SPEC §10.5 参照。 |
 | `void setTransparentColor(color)` | `renderTransparent*()` が転送から除外する色（既定 `TFT_TRANSPARENT` = RGB565 `0x0120`）。値の C++ 型に従って解釈される。SPEC §22.4 参照。 |

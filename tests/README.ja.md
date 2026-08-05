@@ -14,7 +14,7 @@ LGFXVirtualCanvas の自動テストスイート。
 **Tier 1 — 機能・正当性(LovyanGFX):**
 
 - `parity/` — 中核の不変条件: 同じ `drawScene()` を複数の分割数・**両方の分割軸（行 / 列）** で描いた結果が **ピクセル完全一致** すること。複数シーン（図形・円・テキスト・境界・クリッピング・fuzz・アニメ）。不一致時は `*_full.png` / `*_virtual.png` / `*_diff.png` を保存
-- `autoclear/` — auto-clear の決定性・`setBackgroundColor`・`setAutoClear(false)`
+- `autoclear/` — auto-clear の決定性・`setBackgroundColor`（色が C++ 型に従って解釈されること＝同じ定数を直接パネルに描いた色と一致すること を含む）・`setAutoClear(false)`
 - `memory/` — `setMemoryLimit` のタイルスパン算出（行はタイル高、列はタイル幅）と確保失敗の扱い（フォールバック無し・`begin()`/`render()` が `false`）、および PSRAM 要求と内蔵RAMへのフォールバック
 - `pushimage/` — `pushImage` がタイル境界を跨いでも split 不変
 - `sprite/` — `LGFXVirtualSprite`：タイル分割の正しさ（端数タイル含む）・領域外不可侵・位置移動

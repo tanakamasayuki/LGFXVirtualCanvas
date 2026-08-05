@@ -14,7 +14,7 @@ Automated test suite for LGFXVirtualCanvas.
 **Tier 1 — functional/correctness (LovyanGFX):**
 
 - `parity/` — Core invariant: the same `drawScene()` rendered through `LGFXVirtualScreen` at several split counts **and on both split axes (rows / columns)** must be **pixel-identical**. Multi-scene (shapes, circles, text, boundary, clipping, fuzz, animation). On mismatch it saves `*_full.png` / `*_virtual.png` / `*_diff.png`.
-- `autoclear/` — auto-clear determinism, `setBackgroundColor`, `setAutoClear(false)`.
+- `autoclear/` — auto-clear determinism, `setBackgroundColor` (including that the color is read by its C++ type: the fill must match the same constant drawn straight to the panel), `setAutoClear(false)`.
 - `memory/` — `setMemoryLimit` tile-span math on both axes (tile height for rows, tile width for columns) and allocation-failure semantics (no fallback; `begin()`/`render()` return `false`), plus the PSRAM request and its internal-RAM fallback.
 - `pushimage/` — `pushImage` is split-invariant across tile boundaries.
 - `sprite/` — `LGFXVirtualSprite`: tiling correctness (incl. partial last tile), region containment, movable position.

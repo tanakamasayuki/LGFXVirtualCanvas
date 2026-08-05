@@ -98,6 +98,29 @@ void setup()
     }
     Serial.println("CASE off done");
 
+    // bgtype: setBackgroundColor() must read a color the same way every other
+    // drawing call does — by the value's C++ type (RGB565 for TFT_* / int,
+    // RGB888 for uint32_t). The reference is the panel painted with the very
+    // same constant, so this holds at any color depth.
+    lcd.fillScreen(TFT_BLACK);
+    lcd.fillRect(0, 0, 20, 20, TFT_NAVY); // what TFT_NAVY actually looks like
+    save_png(lcd, "output/ac_bgref.png");
+    {
+        LGFXVirtualScreen screen(lcd, 3);
+        screen.setBackgroundColor(TFT_NAVY); // int -> RGB565
+        screen.render(sceneNoFill);
+        save_png(lcd, "output/ac_bg565.png");
+    }
+    {
+        LGFXVirtualScreen screen(lcd, 3);
+        // The RGB888 spelling of the same color: TFT_NAVY is RGB565 0x000F,
+        // i.e. b5=15 -> b8=(15<<3)|(15>>2)=123.
+        screen.setBackgroundColor((uint32_t)0x00007B);
+        screen.render(sceneNoFill);
+        save_png(lcd, "output/ac_bg888.png");
+    }
+    Serial.println("CASE bgtype done");
+
     Serial.println("TEST done");
 }
 

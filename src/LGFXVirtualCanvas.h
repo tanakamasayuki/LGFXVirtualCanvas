@@ -837,9 +837,19 @@ public:
     }
     /// @brief Set the auto-clear background color (default black / 0).
     ///
+    /// @param color Interpreted exactly like a color argument of any other
+    ///        drawing call, i.e. **by its C++ type**: `int` / `uint16_t` (the
+    ///        `TFT_*` constants, `color565()` results) is RGB565, while
+    ///        `uint32_t` is RGB888. Stored canonically as RGB888.
+    ///
     /// Not used by the `renderTransparent*()` family — those clear the tile with
     /// transparentColor() instead (SPEC §22.3).
-    void setBackgroundColor(uint32_t color) { _bgColor = color; _diffValid = false; }
+    template <typename T>
+    void setBackgroundColor(const T &color)
+    {
+        _bgColor = lgfx::v1::convert_to_rgb888(color);
+        _diffValid = false;
+    }
     /// @brief Enable/disable clearing each tile before draw (default enabled). See SPEC §11.
     void setAutoClear(bool enable) { _autoClear = enable; _diffValid = false; }
     /// @brief Force double-buffering on/off, overriding the default auto mode.
@@ -1283,6 +1293,7 @@ protected:
     size_t _memLimit = 0;
     int _splitCount = 0;
     int _tileSpanCfg = 0; // fixed tile height (rows) / width (columns)
+    // Auto-clear color, stored as RGB888 (see setBackgroundColor()).
     uint32_t _bgColor = 0; // black
     // Transparent color, stored as RGB888 so it is depth-independent (converted
     // per push by LovyanGFX). Only read by a Transfer::Transparent render.
