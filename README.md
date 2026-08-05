@@ -139,6 +139,43 @@ fallback — and `render()` returns `false` without drawing.
 > from it in the callback (that *is* clipped per tile). For very heavy callbacks,
 > use fewer/larger tiles (`setMemoryLimit` / `setSplitCount`). See SPEC §10.7.
 
+### Splitting into columns instead of rows
+
+By default the surface is cut into horizontal bands sent top to bottom. For a
+long strip that is consumed left to right — long-format printing, a ticker, a
+wide waveform — cut it into **full-height columns** instead:
+
+```cpp
+screen.setSplitAxis(LGFXVirtualSplitAxis::Columns);  // vertical bands, left to right
+screen.setTileWidth(32);                             // optional: fixed column width
+```
+
+Nothing else changes: the draw callback still works in full-surface coordinates
+and the image is identical to row splitting (the parity tests assert this pixel
+for pixel). Only text wrapping is affected — see [Limitations](#limitations).
+
+### Tile buffers in PSRAM
+
+On a large panel the internal-RAM default resolves to a lot of tiles, and the
+draw callback is re-run for every one of them. `setUsePsram(true)` lets you
+trade slower memory for far fewer, larger tiles:
+
+```cpp
+screen.setUsePsram(true);
+screen.setMemoryLimit(2 * 1024 * 1024);   // e.g. a few big tiles instead of hundreds
+screen.begin();
+if (!screen.tileIsPsram()) {              // PSRAM absent/full -> served from internal RAM
+    Serial.println("fell back to internal RAM");
+}
+```
+
+This is a speed trade, not a free win: drawing into PSRAM and reading it back
+are both slower, and LovyanGFX pushes a PSRAM sprite without DMA, so
+double-buffering has nothing to overlap and auto mode turns it off. It wins
+when the callback is the bottleneck and loses when the transfer is — measure.
+A PSRAM request never fails the allocation: if PSRAM is unavailable the buffer
+comes from internal RAM and `tileIsPsram()` reports it. See SPEC §10.9.
+
 ## Partial updates with `LGFXVirtualSprite`
 
 To update only a part of the screen (a status area, a moving icon, a fixed
@@ -211,7 +248,12 @@ budget gives a 5-row tile = 1/216 of the screen). See [SPEC.md §21](SPEC.md).
 | `LGFXVirtualScreen(LovyanGFX& panel, int splitCount = 0)` | Construct over a panel. `0` = auto (≈ 19 KB/tile budget). Nothing is allocated yet. |
 | `void setMemoryLimit(size_t bytes)` | Cap the tile buffer; tile height is derived from it (highest priority). |
 | `void setSplitCount(int count)` | Fixed number of tiles. |
-| `void setTileHeight(int height)` | Fixed tile height in pixels. |
+| `void setTileHeight(int height)` | Fixed tile height in pixels (row splitting). |
+| `void setTileWidth(int width)` | Fixed tile width in pixels (column splitting). Same underlying setting as `setTileHeight`. |
+| `void setSplitAxis(LGFXVirtualSplitAxis axis)` | `Rows` (default, horizontal bands top to bottom) or `Columns` (full-height bands left to right). See SPEC §10.8. |
+| `LGFXVirtualSplitAxis splitAxis() const` | Current split axis. |
+| `void setUsePsram(bool enable)` | Allocate the tile buffer(s) in PSRAM (default off). Slower memory, no DMA (auto double-buffering turns off), falls back to internal RAM if unavailable. See SPEC §10.9. |
+| `bool usePsram() const` / `bool tileIsPsram() const` | What was requested / where the buffer actually landed. |
 | `void setBackgroundColor(uint32_t color)` | auto-clear color (default black). |
 | `void setAutoClear(bool enable)` | Clear each tile before draw (default `true`). |
 | `void setDoubleBuffer(bool enable)` | Use two tile buffers so a tile's DMA transfer overlaps the next tile's draw (faster, 2× tile RAM). Overrides the default **auto** mode (on when ≥ 2 tiles, off for a single tile). See SPEC §10.5. |
@@ -222,7 +264,7 @@ budget gives a 5-row tile = 1/216 of the screen). See [SPEC.md §21](SPEC.md).
 | `uint32_t diffPushedPixels() const` / `uint32_t diffTotalPixels() const` | Pixels the last `render()` actually transferred / would have transferred without diffing. |
 | `bool begin()` | Allocate the tile buffer now. `false` on failure (no fallback). |
 | `bool isReady() const` | Whether the buffer is allocated. |
-| `int tileCount() const` / `int tileHeight() const` | Resolved geometry after allocation. |
+| `int tileCount() const` / `int tileHeight() const` / `int tileWidth() const` / `int tileSpan() const` | Resolved geometry after allocation (`tileSpan` = the extent along the split axis). |
 | `bool render(draw)` | Render `void draw(LGFXVirtualCanvas&)`. |
 | `bool render(draw, ctx)` | Render `void draw(LGFXVirtualCanvas&, T&)` with your `ctx`. |
 
@@ -231,7 +273,7 @@ The draw callback must be a **function pointer** (capturing lambdas /
 `std::function` are not accepted, to keep code size down).
 
 Priority when several are set: `setMemoryLimit` > `setSplitCount` >
-`setTileHeight` > default (≈ 19 KB/tile budget). With nothing set,
+`setTileHeight` / `setTileWidth` > default (≈ 19 KB/tile budget). With nothing set,
 double-buffering is auto-enabled when the surface resolves to ≥ 2 tiles.
 
 ### `LGFXVirtualSprite` — a tiled sub-region
@@ -352,8 +394,13 @@ code path proves correctness. Rationale in [SPEC.md §6](SPEC.md).
 
 ## Limitations
 
-- **Vertical tiling only.**
+- **One-dimensional tiling**: rows (default) or columns, not a 2-D grid.
 - **Function pointers only** for the draw callback (no capturing lambdas).
+- **Text wrapping is disabled under column splitting.** LovyanGFX wraps at the
+  tile sprite's own right edge, which is a tile boundary there — that would make
+  the output depend on the split count, so `setTextWrap(true)` is ignored in
+  column mode and long lines are clipped instead. Newlines are corrected back to
+  the surface's left edge, so `println` / `printf` behave as expected.
 - **Neighbor-dependent drawing across tile boundaries** (anti-aliasing,
   smooth/wide lines, blur, neighbor-sampling filters) may not match a full
   render, because each tile is redrawn and clipped independently. LovyanGFX's
@@ -372,7 +419,7 @@ code path proves correctness. Rationale in [SPEC.md §6](SPEC.md).
 See [examples/](examples/): `HelloWorld`, `BouncingBall` (state + animation),
 `MemoryBudget` (budget + failure handling), `Viewport`
 (`LGFXVirtualSprite` partial update), `DiffTransfer` (diff transfer),
-`LovyanGFX_Basic`.
+`ColumnSplit` (column tiles + PSRAM buffers), `LovyanGFX_Basic`.
 
 ## Testing
 

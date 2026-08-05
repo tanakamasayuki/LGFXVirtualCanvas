@@ -17,6 +17,8 @@ Key decisions settled so far:
 - **Clipping is automatically safe via the sprite's standard per-pixel clip** (out-of-range drawing simply disappears).
 - **Each tile is cleared to a background color before draw (auto-clear, default ON).** The background color is configurable (default: black). Undrawn pixels become deterministic (the background color) so the result is identical regardless of split count. Disable with `setAutoClear(false)`.
 - **Two managers**: `LGFXVirtualScreen` (whole panel) and `LGFXVirtualSprite` (a placed sub-region of any size = an internally-tiled sprite, local coordinates). Both share the internal tiling engine and hand your draw function the same `LGFXVirtualCanvas`; only the transfer target (full panel vs a placed rectangle) differs. See §7.1.
+- **The split axis is selectable.** `setSplitAxis(LGFXVirtualSplitAxis::Rows | ::Columns)`; `Rows` (horizontal bands, top to bottom) is the default. `Columns` cuts full-height vertical bands transferred left to right, for surfaces consumed that way (long strips). Only the tile shape and transfer order change — the callback still draws in full-surface coordinates and the output is identical. See §10.8.
+- **Tile buffers can live in PSRAM.** `setUsePsram(true)` (default off) trades slower memory for far fewer tiles on a large panel. It is the one place a fallback is tolerated (internal RAM if PSRAM is unavailable), because it changes speed only. See §10.9.
 - **Diff transfer is optional and disabled by default.** `setDiffMode(LGFXVirtualDiffMode::Tile)` skips transferring tiles unchanged since the previous frame. Granularity is whole tiles only (finer granularity within a tile is a future extension). Only transfer is reduced — draw cost is unchanged and hash computation is added. See §21.
 
 The rationale (especially why a dedicated concrete class) is in §6.
@@ -396,6 +398,29 @@ By contrast, `pushImage` from an **in-RAM** buffer *is* clipped per tile — onl
 2. **Use fewer / larger tiles.** Raise `setMemoryLimit()` or set a low `setSplitCount()` so `N` is small (trading internal RAM); a single tile pays the decode exactly once.
 3. **Skip tiling for a full-screen image that fits** — draw it straight to the panel or one full-screen sprite, and use the tiled canvas only for the dynamic overlay.
 
+### 10.8 Split axis (rows / columns)
+
+`setSplitAxis(LGFXVirtualSplitAxis::Rows | ::Columns)` chooses the direction the surface is cut in. **`Rows` is the default and the original behavior**: horizontal bands of `regionW × span`, transferred top to bottom. `Columns` cuts vertical bands of `span × regionH`, transferred **left to right** — the natural order for a long strip that is consumed column by column (long-format printing, a scrolling ticker, a wide waveform).
+
+Only the tile shape and the transfer order change. The draw callback keeps receiving full-surface coordinates, and the image is identical either way — `tests/parity` asserts pixel equality between both axes at every split count.
+
+**What generalizes.** `LGFXVirtualCanvas` carries `offsetX` alongside `offsetY` and subtracts both before forwarding to the tile sprite; `width()` reports the surface width rather than the tile width. Everything else in §10 is axis-agnostic: the budget/split-count/tile-span priority of §10.1 resolves a span *along the split axis* (`setTileHeight` for rows, `setTileWidth` for columns — the same underlying setting), the clip rect still absorbs the partial last tile, and diff transfer (§21) and double-buffering (§10.5) work per tile regardless of shape.
+
+**Budget math per axis.** For rows the budget divides by the surface's row stride and yields a tile height. For columns it must first cover `regionH` rows, so the bytes left per row convert into a tile width: `tileW = floor(budget / regionH * 8 / bits)`. As with rows, a budget that cannot buy a single pixel of span is an allocation failure (§10.3), not a silent rounding.
+
+**Text is the one thing that does not generalize**, because LovyanGFX resolves two text behaviors against the *sprite's* own width:
+
+- **Wrapping.** `setTextWrap(true)` wraps at the sprite's right edge. Under row splitting the tile spans the full width, so this coincides with the surface edge and is correct. Under column splitting it would wrap at a tile boundary and make the output depend on the split count, so **X wrapping is forced off in column mode** (the tile sprites are created with it off, and `LGFXVirtualCanvas::setTextWrap` keeps it off). Long lines are clipped instead of wrapped. Same for `setTextScroll`.
+- **Newline.** `LGFXBase::write` resets the cursor to the sprite's `x = 0` on `'\n'`, which under column splitting is the *tile's* left edge. Every cursor-based text path (`write`, `print` of a string, `println`, `printf`, `vprintf`) therefore runs through a small helper that lets the sprite advance the line with its own font metrics and then moves the cursor back to surface `x = 0`. With row splitting `offsetX` is 0 and the helper is a plain forward, so nothing changes.
+
+### 10.9 PSRAM tile buffers
+
+`setUsePsram(true)` (default off) allocates the tile sprites in PSRAM via `LGFX_Sprite::setPsram`. The motivating case is a large panel: with the internal-RAM default a full-HD surface resolves to hundreds of tiles and the draw callback is re-run for every one of them (§10.6), so being able to trade slow memory for a much smaller `N` is worth having.
+
+- **It is a speed trade, not a free win.** Drawing into PSRAM and reading it back for the transfer are both markedly slower than internal RAM. One huge PSRAM tile beats many small internal ones only when the callback is the bottleneck; when the transfer is, it loses. Measure (`bench/`).
+- **No DMA.** LovyanGFX pushes a SPIRAM-backed sprite with DMA disabled, so the transfer is synchronous and there is nothing for a second buffer to overlap with. *Auto* double-buffering therefore resolves to **off** when the allocated tile is in PSRAM (§10.5); an explicit `setDoubleBuffer(true)` is still honoured.
+- **Fallback is tolerated here.** If PSRAM is absent or full, LovyanGFX allocates in internal RAM instead and the render succeeds. This is a deliberate exception to §10.3: unlike a split-count or tile-size fallback it changes speed only, never the output or the geometry the caller asked for, and the alternative — failing on a board without PSRAM — would make the setting unusable in portable sketches. `tileIsPsram()` reports what was actually obtained (and is always `false` off ESP32); `usePsram()` reports what was requested.
+
 ## 11. Tile initialization (auto-clear) and fillScreen
 
 ### 11.1 auto-clear (the tile's initial state)
@@ -480,6 +505,8 @@ Each case verifies pixel equality across several splits (e.g. 1/2/3/5/7).
 | T1-11 | animation | run a sequence of frames; each frame split-invariant |
 | T1-12 | pushImage | split-invariant with clip only (overhangs, boundary straddle, off-screen). Verified by experiment; supported (§9.2) |
 | T1-13 | diff transfer | output identical with diffing off vs on (i.e. it stays a transfer optimization); zero transfer for an unchanged frame, only the changed tiles otherwise, `invalidate()` behaviour, invalidation on `LGFXVirtualSprite` move, `Off` allocates nothing (§21.9) |
+| T1-14 | split axis | column tiles produce the same image as row tiles at every split count, single- and double-buffered, including the cursor-based text scenes (§10.8) |
+| T1-15 | column budget / PSRAM | the memory budget resolves a tile *width* under column splitting (maximal, full surface height, consistent tile count); a PSRAM request never fails the allocation and `tileIsPsram()` reports the actual placement (§10.8, §10.9) |
 
 ### 13.5 Shared rules
 

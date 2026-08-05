@@ -1,8 +1,9 @@
 // parity — multi-scene pixel-exact parity (Tier 1).
 //
-// Each scene is rendered through LGFXVirtualScreen at several split counts.
-// split=1 (one full-height tile, offsetY=0) is the full-render reference;
-// the Python side asserts every other split is pixel-identical to it.
+// Each scene is rendered through LGFXVirtualScreen at several split counts,
+// on both split axes (rows / columns, SPEC §10.8). split=1 (one full-screen
+// tile, offset 0) is the full-render reference; the Python side asserts every
+// other variant is pixel-identical to it.
 //
 // Scenes map to SPEC §13.4:
 //   overall (T1-1), shapes (T1-2), circles (T1-3), text (T1-4),
@@ -238,6 +239,17 @@ void setup()
             snprintf(path, sizeof(path), "output/%s_split_%d.png", sc.name, s);
             save_png(lcd, path);
         }
+        // Column splitting (SPEC §10.8) must produce the same image as row
+        // splitting: only the tile shape and the transfer order differ.
+        for (int s : splits)
+        {
+            LGFXVirtualScreen screen(lcd, s);
+            screen.setSplitAxis(LGFXVirtualSplitAxis::Columns);
+            screen.render(sc.fn);
+            char path[80];
+            snprintf(path, sizeof(path), "output/%s_col_%d.png", sc.name, s);
+            save_png(lcd, path);
+        }
         // Double-buffer (ping-pong) must be pixel-identical to single-buffer.
         // Exercised at a multi-tile split and one with a partial last tile.
         for (int s : {3, 7})
@@ -247,6 +259,17 @@ void setup()
             screen.render(sc.fn);
             char path[80];
             snprintf(path, sizeof(path), "output/%s_db_%d.png", sc.name, s);
+            save_png(lcd, path);
+        }
+        // Column splitting with double-buffering (ping-pong over column tiles).
+        for (int s : {3, 7})
+        {
+            LGFXVirtualScreen screen(lcd, s);
+            screen.setSplitAxis(LGFXVirtualSplitAxis::Columns);
+            screen.setDoubleBuffer(true);
+            screen.render(sc.fn);
+            char path[80];
+            snprintf(path, sizeof(path), "output/%s_coldb_%d.png", sc.name, s);
             save_png(lcd, path);
         }
         Serial.printf("SCENE %s done\n", sc.name);

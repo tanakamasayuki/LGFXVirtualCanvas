@@ -13,9 +13,9 @@ Automated test suite for LGFXVirtualCanvas.
 
 **Tier 1 — functional/correctness (LovyanGFX):**
 
-- `parity/` — Core invariant: the same `drawScene()` rendered through `LGFXVirtualScreen` at several split counts must be **pixel-identical**. Multi-scene (shapes, circles, text, boundary, clipping, fuzz, animation). On mismatch it saves `*_full.png` / `*_virtual.png` / `*_diff.png`.
+- `parity/` — Core invariant: the same `drawScene()` rendered through `LGFXVirtualScreen` at several split counts **and on both split axes (rows / columns)** must be **pixel-identical**. Multi-scene (shapes, circles, text, boundary, clipping, fuzz, animation). On mismatch it saves `*_full.png` / `*_virtual.png` / `*_diff.png`.
 - `autoclear/` — auto-clear determinism, `setBackgroundColor`, `setAutoClear(false)`.
-- `memory/` — `setMemoryLimit` tile-height math and allocation-failure semantics (no fallback; `begin()`/`render()` return `false`).
+- `memory/` — `setMemoryLimit` tile-span math on both axes (tile height for rows, tile width for columns) and allocation-failure semantics (no fallback; `begin()`/`render()` return `false`), plus the PSRAM request and its internal-RAM fallback.
 - `pushimage/` — `pushImage` is split-invariant across tile boundaries.
 - `sprite/` — `LGFXVirtualSprite`: tiling correctness (incl. partial last tile), region containment, movable position.
 - `diff/` — Diff transfer (SPEC §21): output identical with diffing off vs on, zero transfer for an unchanged frame, only the changed tiles otherwise, `invalidate()`, sprite-move invalidation, `Off` allocates nothing.

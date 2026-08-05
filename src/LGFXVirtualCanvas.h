@@ -42,28 +42,51 @@
 
 #include "lgfxvirtualcanvas_version.h"
 
+// Optional PSRAM residency check (setUsePsram / tileIsPsram). ESP-IDF moved
+// esp_ptr_external_ram() between headers; on any other platform there is no
+// PSRAM and tileIsPsram() is simply always false.
+#if defined(__has_include)
+#if __has_include(<esp_memory_utils.h>)
+#include <esp_memory_utils.h>
+#define LGFXVIRTUALCANVAS_HAS_PSRAM_CHECK 1
+#elif __has_include(<soc/soc_memory_layout.h>)
+#include <soc/soc_memory_layout.h>
+#define LGFXVIRTUALCANVAS_HAS_PSRAM_CHECK 1
+#endif
+#endif
+
 /// @brief The drawing surface handed to your draw function.
 ///
 /// A concrete class (no virtual, no abstract base) that wraps one tile sprite
-/// plus its Y offset. Coordinates are **local to the target surface** (the full
-/// screen for LGFXVirtualScreen, or the sub-rectangle for LGFXVirtualSprite),
-/// with (0,0) at the surface's top-left. Every method translates that Y into
-/// tile-local coordinates (`y -= offsetY`) before forwarding to the sprite;
-/// drawing outside the tile is clipped away for free by the sprite's per-pixel
-/// clip. You normally never construct this yourself — a manager creates one per
-/// tile and passes it to your draw callback.
+/// plus its offset within the surface. Coordinates are **local to the target
+/// surface** (the full screen for LGFXVirtualScreen, or the sub-rectangle for
+/// LGFXVirtualSprite), with (0,0) at the surface's top-left. Every method
+/// translates into tile-local coordinates (`x -= offsetX`, `y -= offsetY`)
+/// before forwarding to the sprite; drawing outside the tile is clipped away
+/// for free by the sprite's per-pixel clip. You normally never construct this
+/// yourself — a manager creates one per tile and passes it to your draw
+/// callback.
+///
+/// With row splitting (the default) `offsetX` is always 0 and the tile spans
+/// the full surface width; with column splitting (::LGFXVirtualSplitAxis) it is
+/// the tile's left edge. See SPEC §10.8.
 class LGFXVirtualCanvas
 {
 public:
     /// @brief Construct over a tile sprite. (Internal: created per tile by a manager.)
     /// @param tile          The reusable tile sprite to draw into.
+    /// @param offsetX       Surface X of this tile's left edge (subtracted from every draw).
     /// @param offsetY       Surface Y of this tile's top edge (subtracted from every draw).
+    /// @param virtualWidth  Full surface width (returned by width()).
     /// @param virtualHeight Full surface height (returned by height()).
+    LGFXVirtualCanvas(LGFX_Sprite &tile, int32_t offsetX, int32_t offsetY, int32_t virtualWidth, int32_t virtualHeight)
+        : _tile(tile), _offsetX(offsetX), _offsetY(offsetY), _virtualWidth(virtualWidth), _virtualHeight(virtualHeight) {}
+    /// @brief Construct over a row tile (offsetX = 0, surface width = tile width).
     LGFXVirtualCanvas(LGFX_Sprite &tile, int32_t offsetY, int32_t virtualHeight)
-        : _tile(tile), _offsetY(offsetY), _virtualHeight(virtualHeight) {}
+        : LGFXVirtualCanvas(tile, 0, offsetY, tile.width(), virtualHeight) {}
 
     /// @brief Surface width in pixels (the full drawable surface, not the tile).
-    int32_t width(void) const { return _tile.width(); }
+    int32_t width(void) const { return _virtualWidth; }
     /// @brief Surface height in pixels (the full drawable surface, not the tile).
     int32_t height(void) const { return _virtualHeight; }
 
@@ -132,163 +155,163 @@ public:
 
     /// @brief Draw a single pixel at virtual (@p x, @p y).
     template <typename T>
-    void drawPixel(int32_t x, int32_t y, const T &color) { _tile.drawPixel(x, y - _offsetY, color); }
+    void drawPixel(int32_t x, int32_t y, const T &color) { _tile.drawPixel(x - _offsetX, y - _offsetY, color); }
     /// @brief Draw a single pixel with the current drawing color.
-    void drawPixel(int32_t x, int32_t y) { _tile.drawPixel(x, y - _offsetY); }
+    void drawPixel(int32_t x, int32_t y) { _tile.drawPixel(x - _offsetX, y - _offsetY); }
     /// @brief Write a single pixel at virtual (@p x, @p y) with the current drawing color.
-    void writePixel(int32_t x, int32_t y) { _tile.writePixel(x, y - _offsetY); }
+    void writePixel(int32_t x, int32_t y) { _tile.writePixel(x - _offsetX, y - _offsetY); }
     /// @brief Write a single pixel at virtual (@p x, @p y).
     template <typename T>
-    void writePixel(int32_t x, int32_t y, const T &color) { _tile.writePixel(x, y - _offsetY, color); }
+    void writePixel(int32_t x, int32_t y, const T &color) { _tile.writePixel(x - _offsetX, y - _offsetY, color); }
     /// @brief Read a pixel from virtual (@p x, @p y) as RGB565 from the current tile.
-    uint16_t readPixel(int32_t x, int32_t y) { return _tile.readPixel(x, y - _offsetY); }
+    uint16_t readPixel(int32_t x, int32_t y) { return _tile.readPixel(x - _offsetX, y - _offsetY); }
     /// @brief Read a pixel from virtual (@p x, @p y) as an RGB color object from the current tile.
-    auto readPixelRGB(int32_t x, int32_t y) -> decltype(std::declval<LGFX_Sprite &>().readPixelRGB(0, 0)) { return _tile.readPixelRGB(x, y - _offsetY); }
+    auto readPixelRGB(int32_t x, int32_t y) -> decltype(std::declval<LGFX_Sprite &>().readPixelRGB(0, 0)) { return _tile.readPixelRGB(x - _offsetX, y - _offsetY); }
     /// @brief Read a raw pixel value from virtual (@p x, @p y) from the current tile.
-    uint32_t readPixelValue(int32_t x, int32_t y) { return _tile.readPixelValue(x, y - _offsetY); }
+    uint32_t readPixelValue(int32_t x, int32_t y) { return _tile.readPixelValue(x - _offsetX, y - _offsetY); }
     /// @brief Read a rectangle as packed RGB888 bytes from the current tile.
-    void readRectRGB(int32_t x, int32_t y, int32_t w, int32_t h, uint8_t *data) { _tile.readRectRGB(x, y - _offsetY, w, h, data); }
+    void readRectRGB(int32_t x, int32_t y, int32_t w, int32_t h, uint8_t *data) { _tile.readRectRGB(x - _offsetX, y - _offsetY, w, h, data); }
     /// @brief Read a rectangle from the current tile into @p data.
     template <typename T>
-    void readRect(int32_t x, int32_t y, int32_t w, int32_t h, T *data) { _tile.readRect(x, y - _offsetY, w, h, data); }
+    void readRect(int32_t x, int32_t y, int32_t w, int32_t h, T *data) { _tile.readRect(x - _offsetX, y - _offsetY, w, h, data); }
 
     /// @brief Draw a horizontal line of width @p w from virtual (@p x, @p y).
     template <typename T>
-    void drawFastHLine(int32_t x, int32_t y, int32_t w, const T &color) { _tile.drawFastHLine(x, y - _offsetY, w, color); }
+    void drawFastHLine(int32_t x, int32_t y, int32_t w, const T &color) { _tile.drawFastHLine(x - _offsetX, y - _offsetY, w, color); }
     /// @brief Draw a horizontal line with the current drawing color.
-    void drawFastHLine(int32_t x, int32_t y, int32_t w) { _tile.drawFastHLine(x, y - _offsetY, w); }
+    void drawFastHLine(int32_t x, int32_t y, int32_t w) { _tile.drawFastHLine(x - _offsetX, y - _offsetY, w); }
     /// @brief Write a horizontal line with the current drawing color.
-    void writeFastHLine(int32_t x, int32_t y, int32_t w) { _tile.writeFastHLine(x, y - _offsetY, w); }
+    void writeFastHLine(int32_t x, int32_t y, int32_t w) { _tile.writeFastHLine(x - _offsetX, y - _offsetY, w); }
     /// @brief Write a horizontal line.
     template <typename T>
-    void writeFastHLine(int32_t x, int32_t y, int32_t w, const T &color) { _tile.writeFastHLine(x, y - _offsetY, w, color); }
+    void writeFastHLine(int32_t x, int32_t y, int32_t w, const T &color) { _tile.writeFastHLine(x - _offsetX, y - _offsetY, w, color); }
 
     /// @brief Draw a vertical line of height @p h from virtual (@p x, @p y).
     template <typename T>
-    void drawFastVLine(int32_t x, int32_t y, int32_t h, const T &color) { _tile.drawFastVLine(x, y - _offsetY, h, color); }
+    void drawFastVLine(int32_t x, int32_t y, int32_t h, const T &color) { _tile.drawFastVLine(x - _offsetX, y - _offsetY, h, color); }
     /// @brief Draw a vertical line with the current drawing color.
-    void drawFastVLine(int32_t x, int32_t y, int32_t h) { _tile.drawFastVLine(x, y - _offsetY, h); }
+    void drawFastVLine(int32_t x, int32_t y, int32_t h) { _tile.drawFastVLine(x - _offsetX, y - _offsetY, h); }
     /// @brief Write a vertical line with the current drawing color.
-    void writeFastVLine(int32_t x, int32_t y, int32_t h) { _tile.writeFastVLine(x, y - _offsetY, h); }
+    void writeFastVLine(int32_t x, int32_t y, int32_t h) { _tile.writeFastVLine(x - _offsetX, y - _offsetY, h); }
     /// @brief Write a vertical line.
     template <typename T>
-    void writeFastVLine(int32_t x, int32_t y, int32_t h, const T &color) { _tile.writeFastVLine(x, y - _offsetY, h, color); }
+    void writeFastVLine(int32_t x, int32_t y, int32_t h, const T &color) { _tile.writeFastVLine(x - _offsetX, y - _offsetY, h, color); }
 
     /// @brief Draw a line between virtual (@p x0, @p y0) and (@p x1, @p y1).
     template <typename T>
-    void drawLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, const T &color) { _tile.drawLine(x0, y0 - _offsetY, x1, y1 - _offsetY, color); }
+    void drawLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, const T &color) { _tile.drawLine(x0 - _offsetX, y0 - _offsetY, x1 - _offsetX, y1 - _offsetY, color); }
     /// @brief Draw a line with the current drawing color.
-    void drawLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1) { _tile.drawLine(x0, y0 - _offsetY, x1, y1 - _offsetY); }
+    void drawLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1) { _tile.drawLine(x0 - _offsetX, y0 - _offsetY, x1 - _offsetX, y1 - _offsetY); }
 
     /// @brief Fill a rectangle at virtual (@p x, @p y) of size @p w × @p h.
     template <typename T>
-    void fillRect(int32_t x, int32_t y, int32_t w, int32_t h, const T &color) { _tile.fillRect(x, y - _offsetY, w, h, color); }
+    void fillRect(int32_t x, int32_t y, int32_t w, int32_t h, const T &color) { _tile.fillRect(x - _offsetX, y - _offsetY, w, h, color); }
     /// @brief Fill a rectangle with the current drawing color.
-    void fillRect(int32_t x, int32_t y, int32_t w, int32_t h) { _tile.fillRect(x, y - _offsetY, w, h); }
+    void fillRect(int32_t x, int32_t y, int32_t w, int32_t h) { _tile.fillRect(x - _offsetX, y - _offsetY, w, h); }
     /// @brief Write a filled rectangle with the current drawing color.
-    void writeFillRect(int32_t x, int32_t y, int32_t w, int32_t h) { _tile.writeFillRect(x, y - _offsetY, w, h); }
+    void writeFillRect(int32_t x, int32_t y, int32_t w, int32_t h) { _tile.writeFillRect(x - _offsetX, y - _offsetY, w, h); }
     /// @brief Write a filled rectangle.
     template <typename T>
-    void writeFillRect(int32_t x, int32_t y, int32_t w, int32_t h, const T &color) { _tile.writeFillRect(x, y - _offsetY, w, h, color); }
+    void writeFillRect(int32_t x, int32_t y, int32_t w, int32_t h, const T &color) { _tile.writeFillRect(x - _offsetX, y - _offsetY, w, h, color); }
     /// @brief Compatibility wrapper for LGFX preclipped rectangle writes.
     /// @note VirtualCanvas clips through fillRect instead of trusting the caller's preclip.
-    void writeFillRectPreclipped(int32_t x, int32_t y, int32_t w, int32_t h) { _tile.fillRect(x, y - _offsetY, w, h); }
+    void writeFillRectPreclipped(int32_t x, int32_t y, int32_t w, int32_t h) { _tile.fillRect(x - _offsetX, y - _offsetY, w, h); }
     /// @brief Compatibility wrapper for LGFX preclipped rectangle writes.
     template <typename T>
-    void writeFillRectPreclipped(int32_t x, int32_t y, int32_t w, int32_t h, const T &color) { _tile.fillRect(x, y - _offsetY, w, h, color); }
+    void writeFillRectPreclipped(int32_t x, int32_t y, int32_t w, int32_t h, const T &color) { _tile.fillRect(x - _offsetX, y - _offsetY, w, h, color); }
     /// @brief Fill a rectangle with alpha compositing.
     template <typename T>
-    void fillRectAlpha(int32_t x, int32_t y, int32_t w, int32_t h, uint8_t alpha, const T &color) { _tile.fillRectAlpha(x, y - _offsetY, w, h, alpha, color); }
+    void fillRectAlpha(int32_t x, int32_t y, int32_t w, int32_t h, uint8_t alpha, const T &color) { _tile.fillRectAlpha(x - _offsetX, y - _offsetY, w, h, alpha, color); }
 
     /// @brief Draw a rectangle outline at virtual (@p x, @p y) of size @p w × @p h.
     template <typename T>
-    void drawRect(int32_t x, int32_t y, int32_t w, int32_t h, const T &color) { _tile.drawRect(x, y - _offsetY, w, h, color); }
+    void drawRect(int32_t x, int32_t y, int32_t w, int32_t h, const T &color) { _tile.drawRect(x - _offsetX, y - _offsetY, w, h, color); }
     /// @brief Draw a rectangle outline with the current drawing color.
-    void drawRect(int32_t x, int32_t y, int32_t w, int32_t h) { _tile.drawRect(x, y - _offsetY, w, h); }
+    void drawRect(int32_t x, int32_t y, int32_t w, int32_t h) { _tile.drawRect(x - _offsetX, y - _offsetY, w, h); }
 
     /// @brief Fill a rounded rectangle at virtual (@p x, @p y) of size @p w × @p h.
     template <typename T>
-    void fillRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, const T &color) { _tile.fillRoundRect(x, y - _offsetY, w, h, r, color); }
+    void fillRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, const T &color) { _tile.fillRoundRect(x - _offsetX, y - _offsetY, w, h, r, color); }
     /// @brief Fill a rounded rectangle with the current drawing color.
-    void fillRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r) { _tile.fillRoundRect(x, y - _offsetY, w, h, r); }
+    void fillRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r) { _tile.fillRoundRect(x - _offsetX, y - _offsetY, w, h, r); }
 
     /// @brief Draw a rounded rectangle outline at virtual (@p x, @p y) of size @p w × @p h.
     template <typename T>
-    void drawRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, const T &color) { _tile.drawRoundRect(x, y - _offsetY, w, h, r, color); }
+    void drawRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, const T &color) { _tile.drawRoundRect(x - _offsetX, y - _offsetY, w, h, r, color); }
     /// @brief Draw a rounded rectangle outline with the current drawing color.
-    void drawRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r) { _tile.drawRoundRect(x, y - _offsetY, w, h, r); }
+    void drawRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r) { _tile.drawRoundRect(x - _offsetX, y - _offsetY, w, h, r); }
 
     /// @brief Draw a circle outline of radius @p r centered at virtual (@p x, @p y).
     template <typename T>
-    void drawCircle(int32_t x, int32_t y, int32_t r, const T &color) { _tile.drawCircle(x, y - _offsetY, r, color); }
+    void drawCircle(int32_t x, int32_t y, int32_t r, const T &color) { _tile.drawCircle(x - _offsetX, y - _offsetY, r, color); }
     /// @brief Draw a circle outline with the current drawing color.
-    void drawCircle(int32_t x, int32_t y, int32_t r) { _tile.drawCircle(x, y - _offsetY, r); }
+    void drawCircle(int32_t x, int32_t y, int32_t r) { _tile.drawCircle(x - _offsetX, y - _offsetY, r); }
 
     /// @brief Fill a circle of radius @p r centered at virtual (@p x, @p y).
     template <typename T>
-    void fillCircle(int32_t x, int32_t y, int32_t r, const T &color) { _tile.fillCircle(x, y - _offsetY, r, color); }
+    void fillCircle(int32_t x, int32_t y, int32_t r, const T &color) { _tile.fillCircle(x - _offsetX, y - _offsetY, r, color); }
     /// @brief Fill a circle with the current drawing color.
-    void fillCircle(int32_t x, int32_t y, int32_t r) { _tile.fillCircle(x, y - _offsetY, r); }
+    void fillCircle(int32_t x, int32_t y, int32_t r) { _tile.fillCircle(x - _offsetX, y - _offsetY, r); }
 
     /// @brief Draw an ellipse outline centered at virtual (@p x, @p y).
     template <typename T>
-    void drawEllipse(int32_t x, int32_t y, int32_t rx, int32_t ry, const T &color) { _tile.drawEllipse(x, y - _offsetY, rx, ry, color); }
+    void drawEllipse(int32_t x, int32_t y, int32_t rx, int32_t ry, const T &color) { _tile.drawEllipse(x - _offsetX, y - _offsetY, rx, ry, color); }
     /// @brief Draw an ellipse outline with the current drawing color.
-    void drawEllipse(int32_t x, int32_t y, int32_t rx, int32_t ry) { _tile.drawEllipse(x, y - _offsetY, rx, ry); }
+    void drawEllipse(int32_t x, int32_t y, int32_t rx, int32_t ry) { _tile.drawEllipse(x - _offsetX, y - _offsetY, rx, ry); }
 
     /// @brief Fill an ellipse centered at virtual (@p x, @p y).
     template <typename T>
-    void fillEllipse(int32_t x, int32_t y, int32_t rx, int32_t ry, const T &color) { _tile.fillEllipse(x, y - _offsetY, rx, ry, color); }
+    void fillEllipse(int32_t x, int32_t y, int32_t rx, int32_t ry, const T &color) { _tile.fillEllipse(x - _offsetX, y - _offsetY, rx, ry, color); }
     /// @brief Fill an ellipse with the current drawing color.
-    void fillEllipse(int32_t x, int32_t y, int32_t rx, int32_t ry) { _tile.fillEllipse(x, y - _offsetY, rx, ry); }
+    void fillEllipse(int32_t x, int32_t y, int32_t rx, int32_t ry) { _tile.fillEllipse(x - _offsetX, y - _offsetY, rx, ry); }
 
     /// @brief Draw a triangle through virtual points (@p x0,@p y0), (@p x1,@p y1), (@p x2,@p y2).
     template <typename T>
-    void drawTriangle(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2, const T &color) { _tile.drawTriangle(x0, y0 - _offsetY, x1, y1 - _offsetY, x2, y2 - _offsetY, color); }
+    void drawTriangle(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2, const T &color) { _tile.drawTriangle(x0 - _offsetX, y0 - _offsetY, x1 - _offsetX, y1 - _offsetY, x2 - _offsetX, y2 - _offsetY, color); }
     /// @brief Draw a triangle with the current drawing color.
-    void drawTriangle(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2) { _tile.drawTriangle(x0, y0 - _offsetY, x1, y1 - _offsetY, x2, y2 - _offsetY); }
+    void drawTriangle(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2) { _tile.drawTriangle(x0 - _offsetX, y0 - _offsetY, x1 - _offsetX, y1 - _offsetY, x2 - _offsetX, y2 - _offsetY); }
 
     /// @brief Fill a triangle through virtual points (@p x0,@p y0), (@p x1,@p y1), (@p x2,@p y2).
     template <typename T>
-    void fillTriangle(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2, const T &color) { _tile.fillTriangle(x0, y0 - _offsetY, x1, y1 - _offsetY, x2, y2 - _offsetY, color); }
+    void fillTriangle(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2, const T &color) { _tile.fillTriangle(x0 - _offsetX, y0 - _offsetY, x1 - _offsetX, y1 - _offsetY, x2 - _offsetX, y2 - _offsetY, color); }
     /// @brief Fill a triangle with the current drawing color.
-    void fillTriangle(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2) { _tile.fillTriangle(x0, y0 - _offsetY, x1, y1 - _offsetY, x2, y2 - _offsetY); }
+    void fillTriangle(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2) { _tile.fillTriangle(x0 - _offsetX, y0 - _offsetY, x1 - _offsetX, y1 - _offsetY, x2 - _offsetX, y2 - _offsetY); }
 
     /// @brief Draw a quadratic Bezier curve through virtual points.
     template <typename T>
-    void drawBezier(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2, const T &color) { _tile.drawBezier(x0, y0 - _offsetY, x1, y1 - _offsetY, x2, y2 - _offsetY, color); }
+    void drawBezier(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2, const T &color) { _tile.drawBezier(x0 - _offsetX, y0 - _offsetY, x1 - _offsetX, y1 - _offsetY, x2 - _offsetX, y2 - _offsetY, color); }
     /// @brief Draw a cubic Bezier curve through virtual points.
     template <typename T>
-    void drawBezier(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2, int32_t x3, int32_t y3, const T &color) { _tile.drawBezier(x0, y0 - _offsetY, x1, y1 - _offsetY, x2, y2 - _offsetY, x3, y3 - _offsetY, color); }
+    void drawBezier(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t x2, int32_t y2, int32_t x3, int32_t y3, const T &color) { _tile.drawBezier(x0 - _offsetX, y0 - _offsetY, x1 - _offsetX, y1 - _offsetY, x2 - _offsetX, y2 - _offsetY, x3 - _offsetX, y3 - _offsetY, color); }
 
     /// @brief Draw an elliptical arc centered at virtual (@p x, @p y).
     template <typename T>
-    void drawEllipseArc(int32_t x, int32_t y, int32_t r0x, int32_t r1x, int32_t r0y, int32_t r1y, float angle0, float angle1, const T &color) { _tile.drawEllipseArc(x, y - _offsetY, r0x, r1x, r0y, r1y, angle0, angle1, color); }
+    void drawEllipseArc(int32_t x, int32_t y, int32_t r0x, int32_t r1x, int32_t r0y, int32_t r1y, float angle0, float angle1, const T &color) { _tile.drawEllipseArc(x - _offsetX, y - _offsetY, r0x, r1x, r0y, r1y, angle0, angle1, color); }
     /// @brief Fill an elliptical arc centered at virtual (@p x, @p y).
     template <typename T>
-    void fillEllipseArc(int32_t x, int32_t y, int32_t r0x, int32_t r1x, int32_t r0y, int32_t r1y, float angle0, float angle1, const T &color) { _tile.fillEllipseArc(x, y - _offsetY, r0x, r1x, r0y, r1y, angle0, angle1, color); }
+    void fillEllipseArc(int32_t x, int32_t y, int32_t r0x, int32_t r1x, int32_t r0y, int32_t r1y, float angle0, float angle1, const T &color) { _tile.fillEllipseArc(x - _offsetX, y - _offsetY, r0x, r1x, r0y, r1y, angle0, angle1, color); }
     /// @brief Draw a circular arc centered at virtual (@p x, @p y).
     template <typename T>
-    void drawArc(int32_t x, int32_t y, int32_t r0, int32_t r1, float angle0, float angle1, const T &color) { _tile.drawArc(x, y - _offsetY, r0, r1, angle0, angle1, color); }
+    void drawArc(int32_t x, int32_t y, int32_t r0, int32_t r1, float angle0, float angle1, const T &color) { _tile.drawArc(x - _offsetX, y - _offsetY, r0, r1, angle0, angle1, color); }
     /// @brief Fill a circular arc centered at virtual (@p x, @p y).
     template <typename T>
-    void fillArc(int32_t x, int32_t y, int32_t r0, int32_t r1, float angle0, float angle1, const T &color) { _tile.fillArc(x, y - _offsetY, r0, r1, angle0, angle1, color); }
+    void fillArc(int32_t x, int32_t y, int32_t r0, int32_t r1, float angle0, float angle1, const T &color) { _tile.fillArc(x - _offsetX, y - _offsetY, r0, r1, angle0, angle1, color); }
 
     /// @brief Draw a circle corner helper using the current drawing color.
-    void drawCircleHelper(int32_t x, int32_t y, int32_t r, uint_fast8_t cornername) { _tile.drawCircleHelper(x, y - _offsetY, r, cornername); }
+    void drawCircleHelper(int32_t x, int32_t y, int32_t r, uint_fast8_t cornername) { _tile.drawCircleHelper(x - _offsetX, y - _offsetY, r, cornername); }
     /// @brief Draw a circle corner helper.
     template <typename T>
-    void drawCircleHelper(int32_t x, int32_t y, int32_t r, uint_fast8_t cornername, const T &color) { _tile.drawCircleHelper(x, y - _offsetY, r, cornername, color); }
+    void drawCircleHelper(int32_t x, int32_t y, int32_t r, uint_fast8_t cornername, const T &color) { _tile.drawCircleHelper(x - _offsetX, y - _offsetY, r, cornername, color); }
     /// @brief Fill a circle corner helper using the current drawing color.
-    void fillCircleHelper(int32_t x, int32_t y, int32_t r, uint_fast8_t corners, int32_t delta) { _tile.fillCircleHelper(x, y - _offsetY, r, corners, delta); }
+    void fillCircleHelper(int32_t x, int32_t y, int32_t r, uint_fast8_t corners, int32_t delta) { _tile.fillCircleHelper(x - _offsetX, y - _offsetY, r, corners, delta); }
     /// @brief Fill a circle corner helper.
     template <typename T>
-    void fillCircleHelper(int32_t x, int32_t y, int32_t r, uint_fast8_t corners, int32_t delta, const T &color) { _tile.fillCircleHelper(x, y - _offsetY, r, corners, delta, color); }
+    void fillCircleHelper(int32_t x, int32_t y, int32_t r, uint_fast8_t corners, int32_t delta, const T &color) { _tile.fillCircleHelper(x - _offsetX, y - _offsetY, r, corners, delta, color); }
 
     /// @brief Set the pivot point in virtual coordinates.
-    void setPivot(float x, float y) { _tile.setPivot(x, y - _offsetY); }
-    /// @brief Current pivot X.
-    float getPivotX(void) const { return _tile.getPivotX(); }
+    void setPivot(float x, float y) { _tile.setPivot(x - _offsetX, y - _offsetY); }
+    /// @brief Current pivot X in virtual coordinates.
+    float getPivotX(void) const { return _tile.getPivotX() + _offsetX; }
     /// @brief Current pivot Y in virtual coordinates.
     float getPivotY(void) const { return _tile.getPivotY() + _offsetY; }
 
@@ -306,116 +329,116 @@ public:
 
     /// @brief Draw a horizontal gradient line from virtual (@p x, @p y).
     template <typename T>
-    void drawGradientHLine(int32_t x, int32_t y, int32_t w, const T &start, const T &end) { _tile.drawGradientHLine(x, y - _offsetY, w, start, end); }
+    void drawGradientHLine(int32_t x, int32_t y, int32_t w, const T &start, const T &end) { _tile.drawGradientHLine(x - _offsetX, y - _offsetY, w, start, end); }
     /// @brief Draw a vertical gradient line from virtual (@p x, @p y).
     template <typename T>
-    void drawGradientVLine(int32_t x, int32_t y, int32_t h, const T &start, const T &end) { _tile.drawGradientVLine(x, y - _offsetY, h, start, end); }
+    void drawGradientVLine(int32_t x, int32_t y, int32_t h, const T &start, const T &end) { _tile.drawGradientVLine(x - _offsetX, y - _offsetY, h, start, end); }
     /// @brief Draw a gradient line between virtual points.
     template <typename T>
-    void drawGradientLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, const T &start, const T &end) { _tile.drawGradientLine(x0, y0 - _offsetY, x1, y1 - _offsetY, start, end); }
+    void drawGradientLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, const T &start, const T &end) { _tile.drawGradientLine(x0 - _offsetX, y0 - _offsetY, x1 - _offsetX, y1 - _offsetY, start, end); }
     /// @brief Draw a gradient line between virtual points from a LovyanGFX color table.
-    void drawGradientLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, const lgfx::v1::colors_t colors) { _tile.drawGradientLine(x0, y0 - _offsetY, x1, y1 - _offsetY, colors); }
+    void drawGradientLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, const lgfx::v1::colors_t colors) { _tile.drawGradientLine(x0 - _offsetX, y0 - _offsetY, x1 - _offsetX, y1 - _offsetY, colors); }
     /// @brief Draw a horizontal gradient line from a LovyanGFX color table.
-    void drawGradientHLine(int32_t x, int32_t y, uint32_t w, const lgfx::v1::colors_t colors) { _tile.drawGradientHLine(x, y - _offsetY, w, colors); }
+    void drawGradientHLine(int32_t x, int32_t y, uint32_t w, const lgfx::v1::colors_t colors) { _tile.drawGradientHLine(x - _offsetX, y - _offsetY, w, colors); }
     /// @brief Draw a vertical gradient line from a LovyanGFX color table.
-    void drawGradientVLine(int32_t x, int32_t y, uint32_t h, const lgfx::v1::colors_t colors) { _tile.drawGradientVLine(x, y - _offsetY, h, colors); }
+    void drawGradientVLine(int32_t x, int32_t y, uint32_t h, const lgfx::v1::colors_t colors) { _tile.drawGradientVLine(x - _offsetX, y - _offsetY, h, colors); }
     /// @brief Fill a rectangle with a gradient.
     template <typename T>
-    void fillGradientRect(int32_t x, int32_t y, uint32_t w, uint32_t h, const T &start, const T &end, lgfx::v1::gradient_fill_styles::fill_style_t style = lgfx::v1::gradient_fill_styles::RADIAL) { _tile.fillGradientRect(x, y - _offsetY, w, h, start, end, style); }
+    void fillGradientRect(int32_t x, int32_t y, uint32_t w, uint32_t h, const T &start, const T &end, lgfx::v1::gradient_fill_styles::fill_style_t style = lgfx::v1::gradient_fill_styles::RADIAL) { _tile.fillGradientRect(x - _offsetX, y - _offsetY, w, h, start, end, style); }
     /// @brief Fill a rectangle with a gradient from a LovyanGFX color table.
-    void fillGradientRect(int32_t x, int32_t y, uint32_t w, uint32_t h, const lgfx::v1::colors_t colors, lgfx::v1::gradient_fill_styles::fill_style_t style = lgfx::v1::gradient_fill_styles::RADIAL) { _tile.fillGradientRect(x, y - _offsetY, w, h, colors, style); }
+    void fillGradientRect(int32_t x, int32_t y, uint32_t w, uint32_t h, const lgfx::v1::colors_t colors, lgfx::v1::gradient_fill_styles::fill_style_t style = lgfx::v1::gradient_fill_styles::RADIAL) { _tile.fillGradientRect(x - _offsetX, y - _offsetY, w, h, colors, style); }
 
     /// @brief Draw an anti-aliased line between virtual points.
     template <typename T>
-    void drawSmoothLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, const T &color) { _tile.drawSmoothLine(x0, y0 - _offsetY, x1, y1 - _offsetY, color); }
+    void drawSmoothLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, const T &color) { _tile.drawSmoothLine(x0 - _offsetX, y0 - _offsetY, x1 - _offsetX, y1 - _offsetY, color); }
     /// @brief Draw a wide line between virtual points.
     template <typename T>
-    void drawWideLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, float r, const T &color) { _tile.drawWideLine(x0, y0 - _offsetY, x1, y1 - _offsetY, r, color); }
+    void drawWideLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, float r, const T &color) { _tile.drawWideLine(x0 - _offsetX, y0 - _offsetY, x1 - _offsetX, y1 - _offsetY, r, color); }
     /// @brief Draw a gradient wide line between virtual points.
-    void drawWideLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, float r, const lgfx::v1::colors_t colors) { _tile.drawWideLine(x0, y0 - _offsetY, x1, y1 - _offsetY, r, colors); }
+    void drawWideLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, float r, const lgfx::v1::colors_t colors) { _tile.drawWideLine(x0 - _offsetX, y0 - _offsetY, x1 - _offsetX, y1 - _offsetY, r, colors); }
     /// @brief Draw a wedge line between virtual points.
     template <typename T>
-    void drawWedgeLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, float r0, float r1, const T &color) { _tile.drawWedgeLine(x0, y0 - _offsetY, x1, y1 - _offsetY, r0, r1, color); }
+    void drawWedgeLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, float r0, float r1, const T &color) { _tile.drawWedgeLine(x0 - _offsetX, y0 - _offsetY, x1 - _offsetX, y1 - _offsetY, r0, r1, color); }
     /// @brief Draw a gradient wedge line between virtual points.
-    void drawWedgeLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, float r0, float r1, const lgfx::v1::colors_t colors) { _tile.drawWedgeLine(x0, y0 - _offsetY, x1, y1 - _offsetY, r0, r1, colors); }
+    void drawWedgeLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, float r0, float r1, const lgfx::v1::colors_t colors) { _tile.drawWedgeLine(x0 - _offsetX, y0 - _offsetY, x1 - _offsetX, y1 - _offsetY, r0, r1, colors); }
     /// @brief Draw a circular spot centered at virtual (@p x, @p y).
     template <typename T>
-    void drawSpot(int32_t x, int32_t y, float r, const T &color) { _tile.drawSpot(x, y - _offsetY, r, color); }
+    void drawSpot(int32_t x, int32_t y, float r, const T &color) { _tile.drawSpot(x - _offsetX, y - _offsetY, r, color); }
     /// @brief Draw a gradient spot centered at virtual (@p x, @p y).
-    void drawGradientSpot(int32_t x, int32_t y, float r, const lgfx::v1::colors_t colors) { _tile.drawGradientSpot(x, y - _offsetY, r, colors); }
+    void drawGradientSpot(int32_t x, int32_t y, float r, const lgfx::v1::colors_t colors) { _tile.drawGradientSpot(x - _offsetX, y - _offsetY, r, colors); }
     /// @brief Fill an anti-aliased rounded rectangle.
     template <typename T>
-    void fillSmoothRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, const T &color) { _tile.fillSmoothRoundRect(x, y - _offsetY, w, h, r, color); }
+    void fillSmoothRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, const T &color) { _tile.fillSmoothRoundRect(x - _offsetX, y - _offsetY, w, h, r, color); }
     /// @brief Fill an anti-aliased circle centered at virtual (@p x, @p y).
     template <typename T>
-    void fillSmoothCircle(int32_t x, int32_t y, int32_t r, const T &color) { _tile.fillSmoothCircle(x, y - _offsetY, r, color); }
+    void fillSmoothCircle(int32_t x, int32_t y, int32_t r, const T &color) { _tile.fillSmoothCircle(x - _offsetX, y - _offsetY, r, color); }
 
     /// @brief Push a @p w × @p h image to virtual (@p x, @p y).
     /// @note The sprite's per-pixel clip discards rows outside the tile
     ///       (including negative dest Y, where LGFX offsets into the source),
     ///       so images straddling tile boundaries reassemble correctly.
     template <typename T>
-    void pushImage(int32_t x, int32_t y, int32_t w, int32_t h, const T *data) { _tile.pushImage(x, y - _offsetY, w, h, data); }
+    void pushImage(int32_t x, int32_t y, int32_t w, int32_t h, const T *data) { _tile.pushImage(x - _offsetX, y - _offsetY, w, h, data); }
     /// @brief Push an image, treating @p transparent as a see-through color.
     template <typename T>
-    void pushImage(int32_t x, int32_t y, int32_t w, int32_t h, const T *data, const T &transparent) { _tile.pushImage(x, y - _offsetY, w, h, data, transparent); }
+    void pushImage(int32_t x, int32_t y, int32_t w, int32_t h, const T *data, const T &transparent) { _tile.pushImage(x - _offsetX, y - _offsetY, w, h, data, transparent); }
     /// @brief Push an image with explicit source color depth and palette.
     template <typename T>
-    void pushImage(int32_t x, int32_t y, int32_t w, int32_t h, const void *data, lgfx::v1::color_depth_t depth, const T *palette) { _tile.pushImage(x, y - _offsetY, w, h, data, depth, palette); }
+    void pushImage(int32_t x, int32_t y, int32_t w, int32_t h, const void *data, lgfx::v1::color_depth_t depth, const T *palette) { _tile.pushImage(x - _offsetX, y - _offsetY, w, h, data, depth, palette); }
     /// @brief Push an image with explicit source color depth, palette, and transparent raw color.
     template <typename T>
-    void pushImage(int32_t x, int32_t y, int32_t w, int32_t h, const void *data, uint32_t transparent, lgfx::v1::color_depth_t depth, const T *palette) { _tile.pushImage(x, y - _offsetY, w, h, data, transparent, depth, palette); }
+    void pushImage(int32_t x, int32_t y, int32_t w, int32_t h, const void *data, uint32_t transparent, lgfx::v1::color_depth_t depth, const T *palette) { _tile.pushImage(x - _offsetX, y - _offsetY, w, h, data, transparent, depth, palette); }
     /// @brief Push an image using LovyanGFX's DMA-capable path when available.
     template <typename T>
-    void pushImageDMA(int32_t x, int32_t y, int32_t w, int32_t h, const T *data) { _tile.pushImageDMA(x, y - _offsetY, w, h, data); }
+    void pushImageDMA(int32_t x, int32_t y, int32_t w, int32_t h, const T *data) { _tile.pushImageDMA(x - _offsetX, y - _offsetY, w, h, data); }
     /// @brief Push an image with explicit source color depth and palette using the DMA-capable path when available.
     template <typename T>
-    void pushImageDMA(int32_t x, int32_t y, int32_t w, int32_t h, const void *data, lgfx::v1::color_depth_t depth, const T *palette) { _tile.pushImageDMA(x, y - _offsetY, w, h, data, depth, palette); }
+    void pushImageDMA(int32_t x, int32_t y, int32_t w, int32_t h, const void *data, lgfx::v1::color_depth_t depth, const T *palette) { _tile.pushImageDMA(x - _offsetX, y - _offsetY, w, h, data, depth, palette); }
     /// @brief Push an image with rotation and scaling.
     template <typename T>
-    void pushImageRotateZoom(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const T *data) { _tile.pushImageRotateZoom(dst_x, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, data); }
+    void pushImageRotateZoom(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const T *data) { _tile.pushImageRotateZoom(dst_x - _offsetX, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, data); }
     /// @brief Push an image with rotation, scaling, and transparency.
     template <typename T1, typename T2>
-    void pushImageRotateZoom(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const T1 *data, const T2 &transparent) { _tile.pushImageRotateZoom(dst_x, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, data, transparent); }
+    void pushImageRotateZoom(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const T1 *data, const T2 &transparent) { _tile.pushImageRotateZoom(dst_x - _offsetX, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, data, transparent); }
     /// @brief Push an image with rotation/scaling, explicit source color depth, and palette.
     template <typename T>
-    void pushImageRotateZoom(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const void *data, lgfx::v1::color_depth_t depth, const T *palette) { _tile.pushImageRotateZoom(dst_x, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, data, depth, palette); }
+    void pushImageRotateZoom(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const void *data, lgfx::v1::color_depth_t depth, const T *palette) { _tile.pushImageRotateZoom(dst_x - _offsetX, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, data, depth, palette); }
     /// @brief Push an image with rotation/scaling, explicit source color depth, palette, and transparent raw color.
     template <typename T>
-    void pushImageRotateZoom(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const void *data, uint32_t transparent, lgfx::v1::color_depth_t depth, const T *palette) { _tile.pushImageRotateZoom(dst_x, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, data, transparent, depth, palette); }
+    void pushImageRotateZoom(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const void *data, uint32_t transparent, lgfx::v1::color_depth_t depth, const T *palette) { _tile.pushImageRotateZoom(dst_x - _offsetX, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, data, transparent, depth, palette); }
     /// @brief Push an image with anti-aliased rotation and scaling.
     template <typename T>
-    void pushImageRotateZoomWithAA(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const T *data) { _tile.pushImageRotateZoomWithAA(dst_x, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, data); }
+    void pushImageRotateZoomWithAA(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const T *data) { _tile.pushImageRotateZoomWithAA(dst_x - _offsetX, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, data); }
     /// @brief Push an image with anti-aliased rotation, scaling, and transparency.
     template <typename T1, typename T2>
-    void pushImageRotateZoomWithAA(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const T1 *data, const T2 &transparent) { _tile.pushImageRotateZoomWithAA(dst_x, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, data, transparent); }
+    void pushImageRotateZoomWithAA(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const T1 *data, const T2 &transparent) { _tile.pushImageRotateZoomWithAA(dst_x - _offsetX, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, data, transparent); }
     /// @brief Push an image with anti-aliased rotation/scaling, explicit source color depth, and palette.
     template <typename T>
-    void pushImageRotateZoomWithAA(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const void *data, lgfx::v1::color_depth_t depth, const T *palette) { _tile.pushImageRotateZoomWithAA(dst_x, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, data, depth, palette); }
+    void pushImageRotateZoomWithAA(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const void *data, lgfx::v1::color_depth_t depth, const T *palette) { _tile.pushImageRotateZoomWithAA(dst_x - _offsetX, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, data, depth, palette); }
     /// @brief Push an image with anti-aliased rotation/scaling, explicit source color depth, palette, and transparent raw color.
     template <typename T>
-    void pushImageRotateZoomWithAA(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const void *data, uint32_t transparent, lgfx::v1::color_depth_t depth, const T *palette) { _tile.pushImageRotateZoomWithAA(dst_x, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, data, transparent, depth, palette); }
+    void pushImageRotateZoomWithAA(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const void *data, uint32_t transparent, lgfx::v1::color_depth_t depth, const T *palette) { _tile.pushImageRotateZoomWithAA(dst_x - _offsetX, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, data, transparent, depth, palette); }
     /// @brief Push a grayscale image with explicit foreground/background colors.
     template <typename T>
-    void pushGrayscaleImage(int32_t x, int32_t y, int32_t w, int32_t h, const uint8_t *image, lgfx::v1::color_depth_t depth, const T &forecolor, const T &backcolor) { _tile.pushGrayscaleImage(x, y - _offsetY, w, h, image, depth, forecolor, backcolor); }
+    void pushGrayscaleImage(int32_t x, int32_t y, int32_t w, int32_t h, const uint8_t *image, lgfx::v1::color_depth_t depth, const T &forecolor, const T &backcolor) { _tile.pushGrayscaleImage(x - _offsetX, y - _offsetY, w, h, image, depth, forecolor, backcolor); }
     /// @brief Push a grayscale image with rotation/scaling and explicit foreground/background colors.
     template <typename T>
-    void pushGrayscaleImageRotateZoom(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const uint8_t *image, lgfx::v1::color_depth_t depth, const T &forecolor, const T &backcolor) { _tile.pushGrayscaleImageRotateZoom(dst_x, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, image, depth, forecolor, backcolor); }
+    void pushGrayscaleImageRotateZoom(float dst_x, float dst_y, float src_x, float src_y, float angle, float zoom_x, float zoom_y, int32_t w, int32_t h, const uint8_t *image, lgfx::v1::color_depth_t depth, const T &forecolor, const T &backcolor) { _tile.pushGrayscaleImageRotateZoom(dst_x - _offsetX, dst_y - _offsetY, src_x, src_y, angle, zoom_x, zoom_y, w, h, image, depth, forecolor, backcolor); }
     /// @brief Push an ARGB/BGRA image with per-pixel alpha.
     template <typename T>
-    void pushAlphaImage(int32_t x, int32_t y, int32_t w, int32_t h, const T *data) { _tile.pushAlphaImage(x, y - _offsetY, w, h, data); }
+    void pushAlphaImage(int32_t x, int32_t y, int32_t w, int32_t h, const T *data) { _tile.pushAlphaImage(x - _offsetX, y - _offsetY, w, h, data); }
     /// @brief Draw a 1-bit bitmap at virtual (@p x, @p y).
     template <typename T>
-    void drawBitmap(int32_t x, int32_t y, const uint8_t *bitmap, int32_t w, int32_t h, const T &color) { _tile.drawBitmap(x, y - _offsetY, bitmap, w, h, color); }
+    void drawBitmap(int32_t x, int32_t y, const uint8_t *bitmap, int32_t w, int32_t h, const T &color) { _tile.drawBitmap(x - _offsetX, y - _offsetY, bitmap, w, h, color); }
     /// @brief Draw a 1-bit bitmap with foreground/background colors.
     template <typename T>
-    void drawBitmap(int32_t x, int32_t y, const uint8_t *bitmap, int32_t w, int32_t h, const T &fg, const T &bg) { _tile.drawBitmap(x, y - _offsetY, bitmap, w, h, fg, bg); }
+    void drawBitmap(int32_t x, int32_t y, const uint8_t *bitmap, int32_t w, int32_t h, const T &fg, const T &bg) { _tile.drawBitmap(x - _offsetX, y - _offsetY, bitmap, w, h, fg, bg); }
     /// @brief Draw an XBM-format bitmap at virtual (@p x, @p y).
     template <typename T>
-    void drawXBitmap(int32_t x, int32_t y, const uint8_t *bitmap, int32_t w, int32_t h, const T &color) { _tile.drawXBitmap(x, y - _offsetY, bitmap, w, h, color); }
+    void drawXBitmap(int32_t x, int32_t y, const uint8_t *bitmap, int32_t w, int32_t h, const T &color) { _tile.drawXBitmap(x - _offsetX, y - _offsetY, bitmap, w, h, color); }
     /// @brief Draw an XBM-format bitmap with foreground/background colors.
     template <typename T>
-    void drawXBitmap(int32_t x, int32_t y, const uint8_t *bitmap, int32_t w, int32_t h, const T &fg, const T &bg) { _tile.drawXBitmap(x, y - _offsetY, bitmap, w, h, fg, bg); }
+    void drawXBitmap(int32_t x, int32_t y, const uint8_t *bitmap, int32_t w, int32_t h, const T &fg, const T &bg) { _tile.drawXBitmap(x - _offsetX, y - _offsetY, bitmap, w, h, fg, bg); }
 
     /// @brief Whether 16-bit image data byte swapping is enabled.
     bool getSwapBytes(void) const { return _tile.getSwapBytes(); }
@@ -423,52 +446,52 @@ public:
     void setSwapBytes(bool swap) { _tile.setSwapBytes(swap); }
 
     /// @brief Decode and draw a BMP image from memory at virtual (@p x, @p y).
-    bool drawBmp(const uint8_t *data, uint32_t len, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawBmp(data, len, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    bool drawBmp(const uint8_t *data, uint32_t len, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawBmp(data, len, x - _offsetX, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
     /// @brief Decode and draw a BMP image from a LovyanGFX DataWrapper.
-    bool drawBmp(lgfx::v1::DataWrapper *data, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawBmp(data, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    bool drawBmp(lgfx::v1::DataWrapper *data, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawBmp(data, x - _offsetX, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
     /// @brief Decode and draw a BMP file from the default filesystem.
-    bool drawBmpFile(const char *path, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawBmpFile(path, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    bool drawBmpFile(const char *path, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawBmpFile(path, x - _offsetX, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
     /// @brief Decode and draw a BMP file from @p fs.
     template <typename FS>
-    bool drawBmpFile(FS &fs, const char *path, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawBmpFile(fs, path, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    bool drawBmpFile(FS &fs, const char *path, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawBmpFile(fs, path, x - _offsetX, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
 
     /// @brief Decode and draw a JPEG image from memory at virtual (@p x, @p y).
-    bool drawJpg(const uint8_t *data, uint32_t len, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawJpg(data, len, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    bool drawJpg(const uint8_t *data, uint32_t len, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawJpg(data, len, x - _offsetX, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
     /// @brief Decode and draw a JPEG image from a LovyanGFX DataWrapper.
-    bool drawJpg(lgfx::v1::DataWrapper *data, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawJpg(data, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    bool drawJpg(lgfx::v1::DataWrapper *data, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawJpg(data, x - _offsetX, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
     /// @brief Decode and draw a JPEG file from the default filesystem.
-    bool drawJpgFile(const char *path, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawJpgFile(path, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    bool drawJpgFile(const char *path, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawJpgFile(path, x - _offsetX, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
     /// @brief Decode and draw a JPEG file from @p fs.
     template <typename FS>
-    bool drawJpgFile(FS &fs, const char *path, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawJpgFile(fs, path, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    bool drawJpgFile(FS &fs, const char *path, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawJpgFile(fs, path, x - _offsetX, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
 
     /// @brief Decode and draw a PNG image from memory at virtual (@p x, @p y).
-    bool drawPng(const uint8_t *data, uint32_t len, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawPng(data, len, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    bool drawPng(const uint8_t *data, uint32_t len, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawPng(data, len, x - _offsetX, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
     /// @brief Decode and draw a PNG image from a LovyanGFX DataWrapper.
-    bool drawPng(lgfx::v1::DataWrapper *data, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawPng(data, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    bool drawPng(lgfx::v1::DataWrapper *data, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawPng(data, x - _offsetX, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
     /// @brief Decode and draw a PNG file from the default filesystem.
-    bool drawPngFile(const char *path, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawPngFile(path, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    bool drawPngFile(const char *path, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawPngFile(path, x - _offsetX, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
     /// @brief Decode and draw a PNG file from @p fs.
     template <typename FS>
-    bool drawPngFile(FS &fs, const char *path, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawPngFile(fs, path, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    bool drawPngFile(FS &fs, const char *path, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawPngFile(fs, path, x - _offsetX, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
 
     /// @brief Decode and draw a QOI image from memory at virtual (@p x, @p y).
-    bool drawQoi(const uint8_t *data, uint32_t len, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawQoi(data, len, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    bool drawQoi(const uint8_t *data, uint32_t len, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawQoi(data, len, x - _offsetX, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
     /// @brief Decode and draw a QOI image from a LovyanGFX DataWrapper.
-    bool drawQoi(lgfx::v1::DataWrapper *data, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawQoi(data, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    bool drawQoi(lgfx::v1::DataWrapper *data, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawQoi(data, x - _offsetX, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
     /// @brief Decode and draw a QOI file from the default filesystem.
-    bool drawQoiFile(const char *path, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawQoiFile(path, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    bool drawQoiFile(const char *path, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawQoiFile(path, x - _offsetX, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
     /// @brief Decode and draw a QOI file from @p fs.
     template <typename FS>
-    bool drawQoiFile(FS &fs, const char *path, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawQoiFile(fs, path, x, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
+    bool drawQoiFile(FS &fs, const char *path, int32_t x = 0, int32_t y = 0, int32_t maxWidth = 0, int32_t maxHeight = 0, int32_t offX = 0, int32_t offY = 0, float scaleX = 1.0f, float scaleY = 0.0f, datum_t datum = datum_t::top_left) { return _tile.drawQoiFile(fs, path, x - _offsetX, y - _offsetY, maxWidth, maxHeight, offX, offY, scaleX, scaleY, datum); }
 
     /// @brief Generate and draw a QR code at virtual (@p x, @p y).
     void qrcode(const char *string, int32_t x = -1, int32_t y = -1, int32_t width = -1, uint8_t version = 1, bool margin = false)
     {
-        const int32_t w = (width < 0) ? ((_tile.width() < _virtualHeight) ? _tile.width() : _virtualHeight) : width;
-        const int32_t vx = (x < 0) ? ((_tile.width() - w) / 2) : x;
+        const int32_t w = (width < 0) ? ((_virtualWidth < _virtualHeight) ? _virtualWidth : _virtualHeight) : width;
+        const int32_t vx = (x < 0) ? ((_virtualWidth - w) / 2) : x;
         const int32_t vy = (y < 0) ? ((_virtualHeight - w) / 2) : y;
-        _tile.qrcode(string, vx, vy - _offsetY, w, version, margin);
+        _tile.qrcode(string, vx - _offsetX, vy - _offsetY, w, version, margin);
     }
 #ifdef ARDUINO
     /// @brief Generate and draw a QR code from an Arduino String.
@@ -478,13 +501,13 @@ public:
     /// @brief Set the text cursor to virtual (@p x, @p y).
     /// @note `print`/`println`/`printf` then advance the cursor and reproduce
     ///       deterministically across tiles.
-    void setCursor(int32_t x, int32_t y) { _tile.setCursor(x, y - _offsetY); }
+    void setCursor(int32_t x, int32_t y) { _tile.setCursor(x - _offsetX, y - _offsetY); }
     /// @brief Set the text cursor and built-in font.
-    void setCursor(int32_t x, int32_t y, uint8_t font) { _tile.setCursor(x, y - _offsetY, font); }
+    void setCursor(int32_t x, int32_t y, uint8_t font) { _tile.setCursor(x - _offsetX, y - _offsetY, font); }
     /// @brief Set the text cursor and font pointer.
-    void setCursor(int32_t x, int32_t y, const lgfx::v1::IFont *font) { _tile.setCursor(x, y - _offsetY, font); }
-    /// @brief Current cursor X (virtual coordinate).
-    int32_t getCursorX(void) { return _tile.getCursorX(); }
+    void setCursor(int32_t x, int32_t y, const lgfx::v1::IFont *font) { _tile.setCursor(x - _offsetX, y - _offsetY, font); }
+    /// @brief Current cursor X (virtual coordinate — offset added back).
+    int32_t getCursorX(void) { return _tile.getCursorX() + _offsetX; }
     /// @brief Current cursor Y (virtual coordinate — offset added back).
     int32_t getCursorY(void) { return _tile.getCursorY() + _offsetY; }
 
@@ -513,7 +536,12 @@ public:
     /// @brief Current text padding.
     uint32_t getTextPadding(void) const { return _tile.getTextPadding(); }
     /// @brief Enable/disable cursor wrapping in X/Y directions.
-    void setTextWrap(bool wrapX, bool wrapY = false) { _tile.setTextWrap(wrapX, wrapY); }
+    /// @note X wrapping happens at the *tile* edge, which only coincides with the
+    ///       surface edge while the tile spans the full width. Under column
+    ///       splitting it therefore cannot be honoured and is forced off, so the
+    ///       output stays identical whatever the split count is; long lines are
+    ///       clipped instead of wrapped. See SPEC §10.8.
+    void setTextWrap(bool wrapX, bool wrapY = false) { _tile.setTextWrap(wrapX && (_tile.width() == _virtualWidth), wrapY); }
     /// @brief Enable/disable text auto-scroll. See limitations for tile-boundary behavior.
     void setTextScroll(bool scroll) { _tile.setTextScroll(scroll); }
     /// @brief Set the emoji drawing callback.
@@ -559,52 +587,52 @@ public:
 
     /// @brief Draw @p str at virtual (@p x, @p y). @p str may be const char* or String.
     template <typename S>
-    size_t drawString(const S &str, int32_t x, int32_t y) { return _tile.drawString(str, x, y - _offsetY); }
+    size_t drawString(const S &str, int32_t x, int32_t y) { return _tile.drawString(str, x - _offsetX, y - _offsetY); }
     /// @brief Draw @p str at virtual (@p x, @p y) with @p font (a uint8_t index or IFont*).
     template <typename S, typename F>
-    size_t drawString(const S &str, int32_t x, int32_t y, const F &font) { return _tile.drawString(str, x, y - _offsetY, font); }
+    size_t drawString(const S &str, int32_t x, int32_t y, const F &font) { return _tile.drawString(str, x - _offsetX, y - _offsetY, font); }
 
     /// @brief Draw @p str horizontally centered on virtual x = @p x, top at @p y.
     template <typename S>
-    size_t drawCentreString(const S &str, int32_t x, int32_t y) { return _tile.drawCentreString(str, x, y - _offsetY); }
+    size_t drawCentreString(const S &str, int32_t x, int32_t y) { return _tile.drawCentreString(str, x - _offsetX, y - _offsetY); }
     /// @brief drawCentreString() with an explicit @p font.
     template <typename S, typename F>
-    size_t drawCentreString(const S &str, int32_t x, int32_t y, const F &font) { return _tile.drawCentreString(str, x, y - _offsetY, font); }
+    size_t drawCentreString(const S &str, int32_t x, int32_t y, const F &font) { return _tile.drawCentreString(str, x - _offsetX, y - _offsetY, font); }
 
     /// @brief Alias of drawCentreString(), matching LovyanGFX's US spelling.
     template <typename S>
-    size_t drawCenterString(const S &str, int32_t x, int32_t y) { return _tile.drawCenterString(str, x, y - _offsetY); }
+    size_t drawCenterString(const S &str, int32_t x, int32_t y) { return _tile.drawCenterString(str, x - _offsetX, y - _offsetY); }
     /// @brief drawCenterString() with an explicit @p font.
     template <typename S, typename F>
-    size_t drawCenterString(const S &str, int32_t x, int32_t y, const F &font) { return _tile.drawCenterString(str, x, y - _offsetY, font); }
+    size_t drawCenterString(const S &str, int32_t x, int32_t y, const F &font) { return _tile.drawCenterString(str, x - _offsetX, y - _offsetY, font); }
 
     /// @brief Draw @p str right-aligned to virtual x = @p x, top at @p y.
     template <typename S>
-    size_t drawRightString(const S &str, int32_t x, int32_t y) { return _tile.drawRightString(str, x, y - _offsetY); }
+    size_t drawRightString(const S &str, int32_t x, int32_t y) { return _tile.drawRightString(str, x - _offsetX, y - _offsetY); }
     /// @brief drawRightString() with an explicit @p font.
     template <typename S, typename F>
-    size_t drawRightString(const S &str, int32_t x, int32_t y, const F &font) { return _tile.drawRightString(str, x, y - _offsetY, font); }
+    size_t drawRightString(const S &str, int32_t x, int32_t y, const F &font) { return _tile.drawRightString(str, x - _offsetX, y - _offsetY, font); }
 
     /// @brief Draw a number at virtual (@p x, @p y).
-    size_t drawNumber(long num, int32_t x, int32_t y) { return _tile.drawNumber(num, x, y - _offsetY); }
+    size_t drawNumber(long num, int32_t x, int32_t y) { return _tile.drawNumber(num, x - _offsetX, y - _offsetY); }
     /// @brief Draw a number at virtual (@p x, @p y) with an explicit font.
     template <typename F>
-    size_t drawNumber(long num, int32_t x, int32_t y, const F &font) { return _tile.drawNumber(num, x, y - _offsetY, font); }
+    size_t drawNumber(long num, int32_t x, int32_t y, const F &font) { return _tile.drawNumber(num, x - _offsetX, y - _offsetY, font); }
     /// @brief Draw a float at virtual (@p x, @p y).
-    size_t drawFloat(float value, uint8_t dp, int32_t x, int32_t y) { return _tile.drawFloat(value, dp, x, y - _offsetY); }
+    size_t drawFloat(float value, uint8_t dp, int32_t x, int32_t y) { return _tile.drawFloat(value, dp, x - _offsetX, y - _offsetY); }
     /// @brief Draw a float at virtual (@p x, @p y) with an explicit font.
     template <typename F>
-    size_t drawFloat(float value, uint8_t dp, int32_t x, int32_t y, const F &font) { return _tile.drawFloat(value, dp, x, y - _offsetY, font); }
+    size_t drawFloat(float value, uint8_t dp, int32_t x, int32_t y, const F &font) { return _tile.drawFloat(value, dp, x - _offsetX, y - _offsetY, font); }
     /// @brief Draw a Unicode code point at virtual (@p x, @p y).
-    size_t drawChar(uint16_t code, int32_t x, int32_t y) { return _tile.drawChar(code, x, y - _offsetY); }
+    size_t drawChar(uint16_t code, int32_t x, int32_t y) { return _tile.drawChar(code, x - _offsetX, y - _offsetY); }
     /// @brief Draw a Unicode code point at virtual (@p x, @p y) with a built-in font.
-    size_t drawChar(uint16_t code, int32_t x, int32_t y, uint8_t font) { return _tile.drawChar(code, x, y - _offsetY, font); }
+    size_t drawChar(uint16_t code, int32_t x, int32_t y, uint8_t font) { return _tile.drawChar(code, x - _offsetX, y - _offsetY, font); }
     /// @brief Draw a Unicode code point with explicit colors and uniform text size.
     template <typename T>
-    size_t drawChar(int32_t x, int32_t y, uint16_t code, const T &color, const T &bg, float size) { return _tile.drawChar(x, y - _offsetY, code, color, bg, size); }
+    size_t drawChar(int32_t x, int32_t y, uint16_t code, const T &color, const T &bg, float size) { return _tile.drawChar(x - _offsetX, y - _offsetY, code, color, bg, size); }
     /// @brief Draw a Unicode code point with explicit colors and X/Y text sizes.
     template <typename T>
-    size_t drawChar(int32_t x, int32_t y, uint16_t code, const T &color, const T &bg, float sx, float sy) { return _tile.drawChar(x, y - _offsetY, code, color, bg, sx, sy); }
+    size_t drawChar(int32_t x, int32_t y, uint16_t code, const T &color, const T &bg, float sx, float sy) { return _tile.drawChar(x - _offsetX, y - _offsetY, code, color, bg, sx, sy); }
 
     /// @brief Print @p v at the cursor (covers all Arduino Print / LGFX overloads).
     template <typename T>
@@ -612,22 +640,35 @@ public:
     /// @brief Print @p v in number base @p base (e.g. HEX) at the cursor.
     template <typename T>
     size_t print(const T &v, int base) { return _tile.print(v, base); }
+    /// @brief Print a C string at the cursor (newline-corrected; see writeUtf8()).
+    size_t print(const char *str) { return str ? writeString(str, strlen(str)) : 0; }
+    /// @brief Print a string literal / char array at the cursor.
+    /// @note Needed next to print(const char*): for an array argument the generic
+    ///       template is an exact match and would otherwise win overload resolution.
+    template <size_t N>
+    size_t print(const char (&str)[N]) { return writeString(str, strlen(str)); }
+    /// @brief Print a single character at the cursor.
+    size_t print(char c) { return writeUtf8((uint8_t)c); }
+#ifdef ARDUINO
+    /// @brief Print an Arduino String at the cursor.
+    size_t print(const String &str) { return writeString(str.c_str(), str.length()); }
+#endif
     /// @brief Print @p v followed by a newline.
     template <typename T>
-    size_t println(const T &v) { return _tile.println(v); }
+    size_t println(const T &v) { return print(v) + writeUtf8('\n'); }
     /// @brief Print @p v in base @p base followed by a newline.
     template <typename T>
-    size_t println(const T &v, int base) { return _tile.println(v, base); }
+    size_t println(const T &v, int base) { return _tile.print(v, base) + writeUtf8('\n'); }
     /// @brief Print a newline.
-    size_t println(void) { return _tile.println(); }
+    size_t println(void) { return writeUtf8('\n'); }
     /// @brief Write one UTF-8 byte/code unit at the cursor.
-    size_t write(uint8_t utf8) { return _tile.write(utf8); }
+    size_t write(uint8_t utf8) { return writeUtf8(utf8); }
     /// @brief Write a byte buffer at the cursor.
-    size_t write(const uint8_t *buf, size_t size) { return _tile.write(buf, size); }
+    size_t write(const uint8_t *buf, size_t size) { return writeString((const char *)buf, size); }
     /// @brief Write a C string at the cursor.
-    size_t write(const char *str) { return _tile.write(str); }
+    size_t write(const char *str) { return str ? writeString(str, strlen(str)) : 0; }
     /// @brief Write a C string span at the cursor.
-    size_t write(const char *buf, size_t size) { return _tile.write(buf, size); }
+    size_t write(const char *buf, size_t size) { return writeString(buf, size); }
 
     /// @brief printf-style formatted text at the cursor (up to 159 chars per call).
     int printf(const char *format, ...)
@@ -637,15 +678,48 @@ public:
         va_start(ap, format);
         int n = vsnprintf(buf, sizeof(buf), format, ap);
         va_end(ap);
-        _tile.print(buf);
+        writeString(buf, strlen(buf));
         return n;
     }
     /// @brief vprintf-style formatted text at the cursor.
-    size_t vprintf(const char *format, va_list arg) { return _tile.vprintf(format, arg); }
+    size_t vprintf(const char *format, va_list arg)
+    {
+        if (_offsetX == 0)
+            return _tile.vprintf(format, arg); // no newline correction needed
+        char buf[160];
+        const int n = vsnprintf(buf, sizeof(buf), format, arg);
+        if (n <= 0)
+            return 0;
+        return writeString(buf, strlen(buf));
+    }
 
 private:
+    // Newline correction for column splitting. LovyanGFX resets the cursor to the
+    // *sprite's* x = 0 on '\n' (LGFXBase::write), which is the tile's left edge —
+    // the surface's left edge only while the tile spans the full width. Every
+    // cursor-based text path therefore goes through here, and after the sprite has
+    // advanced the line (exactly, using its own font metrics) the cursor is moved
+    // back to surface x = 0. With row splitting `_offsetX` is 0 and this is the
+    // plain forward. See SPEC §10.8.
+    size_t writeUtf8(uint8_t c)
+    {
+        const size_t n = _tile.write(c);
+        if (c == '\n' && _offsetX != 0)
+            _tile.setCursor(-_offsetX, _tile.getCursorY());
+        return n;
+    }
+    size_t writeString(const char *str, size_t len)
+    {
+        size_t n = 0;
+        while (len--)
+            n += writeUtf8((uint8_t)*str++);
+        return n;
+    }
+
     LGFX_Sprite &_tile;
+    int32_t _offsetX;
     int32_t _offsetY;
+    int32_t _virtualWidth;
     int32_t _virtualHeight;
 };
 
@@ -660,6 +734,16 @@ enum class LGFXVirtualDiffMode : uint8_t
 {
     Off,  ///< No diffing (default). No hash table is allocated.
     Tile, ///< Per tile: skip transferring tiles unchanged since the previous render.
+};
+
+/// @brief Direction the surface is split in. See SPEC §10.8.
+///
+/// Only the tile *shape* and the transfer order change; the draw callback keeps
+/// receiving full-surface coordinates either way, and the output is identical.
+enum class LGFXVirtualSplitAxis : uint8_t
+{
+    Rows,    ///< Horizontal bands, transferred top to bottom (default; the original behavior).
+    Columns, ///< Vertical bands, transferred left to right (for long-strip / wide surfaces).
 };
 
 /// @brief Internal vertical-tiling engine shared by LGFXVirtualScreen and
@@ -688,12 +772,69 @@ public:
     /// setSplitCount()/setMemoryLimit(). See SPEC §10.1.
     static constexpr size_t DEFAULT_TILE_BYTES = 19200;
 
-    /// @brief Cap the tile buffer to @p bytes; tile height is derived from it (highest priority). 0 = unset.
+    /// @brief Cap the tile buffer to @p bytes; the tile span is derived from it (highest priority). 0 = unset.
     void setMemoryLimit(size_t bytes) { _memLimit = bytes; _dirty = true; }
     /// @brief Use a fixed number of tiles @p count. 0 = unset.
     void setSplitCount(int count) { _splitCount = count; _dirty = true; }
-    /// @brief Use a fixed tile @p height in pixels. 0 = unset.
-    void setTileHeight(int height) { _tileHeightCfg = height; _dirty = true; }
+    /// @brief Use a fixed tile @p height in pixels (row splitting). 0 = unset.
+    /// @note Sets the same "tile span along the split axis" as setTileWidth();
+    ///       only one of them is meaningful for a given split axis.
+    void setTileHeight(int height) { _tileSpanCfg = height; _dirty = true; }
+    /// @brief Use a fixed tile @p width in pixels (column splitting). 0 = unset. @see setTileHeight()
+    void setTileWidth(int width) { _tileSpanCfg = width; _dirty = true; }
+
+    /// @brief Split the surface into rows (default) or columns. See SPEC §10.8.
+    ///
+    /// ::LGFXVirtualSplitAxis::Columns makes each tile a full-height vertical
+    /// band, transferred left to right — the natural order for a long strip fed
+    /// out column by column. Everything else is unchanged: the draw callback
+    /// still works in full-surface coordinates and the resulting image is
+    /// identical to row splitting.
+    ///
+    /// @note With column splitting the tile is narrower than the surface, so
+    ///       LovyanGFX's own width-dependent text behavior no longer matches the
+    ///       surface: `setTextWrap(true)` and `setTextScroll(true)` would wrap /
+    ///       scroll at the tile edge. Keep them off in column mode (SPEC §10.8).
+    void setSplitAxis(LGFXVirtualSplitAxis axis) { _splitAxis = axis; _dirty = true; }
+    /// @brief Current split axis.
+    LGFXVirtualSplitAxis splitAxis(void) const { return _splitAxis; }
+
+    /// @brief Allocate the tile buffer(s) in PSRAM instead of internal RAM (default off).
+    ///
+    /// Lets a large surface use few, large tiles instead of many small ones —
+    /// on a full-HD panel the internal-RAM default resolves to hundreds of
+    /// tiles, and the draw callback is re-run for every one of them (SPEC §10.6).
+    ///
+    /// Trade-offs, all of them real:
+    /// - **Slower memory.** Drawing into PSRAM and reading it back for the
+    ///   transfer are both markedly slower than internal RAM. A single huge
+    ///   PSRAM tile is not automatically faster than many small internal ones —
+    ///   it wins when the draw callback is the bottleneck, and loses when the
+    ///   transfer is. Measure (`bench/`).
+    /// - **No DMA.** LovyanGFX pushes a SPIRAM-backed sprite without DMA, so the
+    ///   transfer is synchronous. Double-buffering therefore has nothing to
+    ///   overlap and *auto* mode turns it off (an explicit setDoubleBuffer(true)
+    ///   is still honoured). @see SPEC §10.5
+    /// - **Silent fallback.** If PSRAM is absent or full, LovyanGFX allocates in
+    ///   internal RAM instead and the render still succeeds. This is the one
+    ///   place the library tolerates a fallback (it changes speed, not output);
+    ///   check tileIsPsram() after begin() if you need to know.
+    ///
+    /// Takes effect at the next allocation.
+    void setUsePsram(bool enable) { _usePsram = enable; _dirty = true; }
+    /// @brief Whether PSRAM allocation was requested. @see setUsePsram()
+    bool usePsram(void) const { return _usePsram; }
+    /// @brief Whether the tile buffer actually lives in PSRAM (false before
+    ///        allocation, on a fallback to internal RAM, and on any non-ESP32 build).
+    bool tileIsPsram(void) const
+    {
+#if defined(LGFXVIRTUALCANVAS_HAS_PSRAM_CHECK)
+        const void *buf = _tile.getBuffer();
+        return (buf != nullptr) && esp_ptr_external_ram(buf);
+#else
+        return false;
+#endif
+    }
     /// @brief Set the auto-clear background color (default black / 0).
     void setBackgroundColor(uint32_t color) { _bgColor = color; _diffValid = false; }
     /// @brief Enable/disable clearing each tile before draw (default enabled). See SPEC §11.
@@ -756,8 +897,12 @@ public:
     bool isReady(void) const { return _ready && !_dirty; }
     /// @brief Number of tiles resolved at allocation.
     int tileCount(void) const { return _tileCount; }
-    /// @brief Tile height in pixels resolved at allocation.
+    /// @brief Tile height in pixels resolved at allocation (= the surface height when splitting into columns).
     int tileHeight(void) const { return _tileHeight; }
+    /// @brief Tile width in pixels resolved at allocation (= the surface width when splitting into rows).
+    int tileWidth(void) const { return _tileWidth; }
+    /// @brief Tile extent along the split axis resolved at allocation (height for rows, width for columns).
+    int tileSpan(void) const { return _tileSpan; }
 
 protected:
     LGFXVirtualTiledBase(LovyanGFX &panel) : _panel(&panel), _tile(&panel), _tile2(&panel) {}
@@ -775,17 +920,36 @@ protected:
     {
         if (!_panel || regionW <= 0 || regionH <= 0)
             return false;
+        const bool columns = (_splitAxis == LGFXVirtualSplitAxis::Columns);
         const int bits = ((int)_panel->getColorDepth()) & 0x00FF; // color_depth_t::bit_mask
-        const int32_t tileH = computeTileHeight(regionW, regionH, bits);
-        if (tileH < 1)
+        const int32_t span = computeTileSpan(regionW, regionH, bits);
+        if (span < 1)
         {
             _ready = false;
             return false; // requested geometry cannot be satisfied
         }
-        const int tileCount = (int)((regionH + tileH - 1) / tileH);
-        // Resolve the double-buffer mode now that the tile count is known. Auto
-        // enables it only when there are ≥ 2 tiles (a single tile has nothing to
-        // overlap with). An explicit setDoubleBuffer() wins. See SPEC §10.5.
+        // The split axis decides which surface extent the span slices; the other
+        // one is the tile's full extent. Rows: regionW × span, top to bottom.
+        // Columns: span × regionH, left to right. See SPEC §10.8.
+        const int32_t axisLength = columns ? regionW : regionH;
+        const int tileCount = (int)((axisLength + span - 1) / span);
+        const int32_t tileW = columns ? span : regionW;
+        const int32_t tileH = columns ? regionH : span;
+        _tile.deleteSprite();
+        _tile2.deleteSprite();
+        _tile.setColorDepth(_panel->getColorDepth());
+        _tile.setPsram(_usePsram);
+        if (_tile.createSprite(tileW, tileH) == nullptr)
+        {
+            _ready = false;
+            return false; // out of RAM
+        }
+        // Resolve the double-buffer mode now that the tile count is known and the
+        // first buffer exists. Auto enables it only when there are ≥ 2 tiles (a
+        // single tile has nothing to overlap with) and the buffer is not in PSRAM
+        // (LGFX pushes a SPIRAM sprite without DMA, so there is no transfer to
+        // overlap with — the second buffer would be pure waste). An explicit
+        // setDoubleBuffer() wins. See SPEC §10.5.
         bool wantDouble;
         switch (_dbMode)
         {
@@ -796,21 +960,14 @@ protected:
             wantDouble = false;
             break;
         default:
-            wantDouble = (tileCount >= 2);
+            wantDouble = (tileCount >= 2) && !tileIsPsram();
             break;
-        }
-        _tile.deleteSprite();
-        _tile2.deleteSprite();
-        _tile.setColorDepth(_panel->getColorDepth());
-        if (_tile.createSprite(regionW, tileH) == nullptr)
-        {
-            _ready = false;
-            return false; // out of RAM
         }
         if (wantDouble)
         {
             _tile2.setColorDepth(_panel->getColorDepth());
-            if (_tile2.createSprite(regionW, tileH) == nullptr)
+            _tile2.setPsram(_usePsram);
+            if (_tile2.createSprite(tileW, tileH) == nullptr)
             {
                 _tile.deleteSprite(); // keep all-or-nothing: no half-allocated state
                 _ready = false;
@@ -834,9 +991,20 @@ protected:
             }
             _diffHashBytes = bytes;
         }
+        // LovyanGFX wraps text at the sprite's own right edge, which under column
+        // splitting is a tile boundary rather than the surface edge — that would
+        // make the output depend on the split count. Turn it off for the tile
+        // sprites (LGFXVirtualCanvas::setTextWrap keeps it off). See SPEC §10.8.
+        if (columns)
+        {
+            _tile.setTextWrap(false, false);
+            _tile2.setTextWrap(false, false);
+        }
         _diffValid = false; // nothing known about the panel content yet
         _regionW = regionW;
         _regionH = regionH;
+        _tileSpan = span;
+        _tileWidth = tileW;
         _tileHeight = tileH;
         _tileCount = tileCount;
         _doubleBuffer = wantDouble; // resolved effective mode (read by renderRegion)
@@ -883,9 +1051,12 @@ protected:
         // starts no DMA. Advancing per tile would let tile i+2 overwrite the
         // buffer tile i is still being transferred from when i+1 is skipped.
         int dbIndex = 0;
+        const bool columns = (_splitAxis == LGFXVirtualSplitAxis::Columns);
         for (int i = 0; i < _tileCount; ++i)
         {
-            const int32_t offsetY = (int32_t)i * _tileHeight;
+            const int32_t offset = (int32_t)i * _tileSpan;
+            const int32_t offsetX = columns ? offset : 0;
+            const int32_t offsetY = columns ? 0 : offset;
             // Double-buffer: alternate transfers so one tile transfers (async
             // DMA) while the next is drawn into the other buffer. The SPI bus
             // serializes consecutive transfers, so the buffer reused here (last
@@ -893,7 +1064,7 @@ protected:
             LGFX_Sprite &buf = (_doubleBuffer && dbIndex) ? _tile2 : _tile;
             if (_autoClear)
                 buf.fillScreen(_bgColor);
-            LGFXVirtualCanvas g(buf, offsetY, _regionH);
+            LGFXVirtualCanvas g(buf, offsetX, offsetY, _regionW, _regionH);
             drawFn(g);
             // Diff transfer (SPEC §21): hash the drawn tile and skip the push
             // when it matches the previous render. The stored hash is updated
@@ -910,11 +1081,12 @@ protected:
             }
             if (push)
             {
-                buf.pushSprite(_panel, posX, posY + offsetY);
-                // Rows of this tile inside the surface (the last tile may be
+                buf.pushSprite(_panel, posX + offsetX, posY + offsetY);
+                // Extent of this tile inside the surface (the last tile may be
                 // partial); the panel clip rect discards the rest.
-                const int32_t rows = (_regionH - offsetY < _tileHeight) ? (_regionH - offsetY) : _tileHeight;
-                _diffPushedPixels += (uint32_t)_regionW * (uint32_t)rows;
+                const int32_t axisRemain = (columns ? _regionW : _regionH) - offset;
+                const int32_t used = (axisRemain < _tileSpan) ? axisRemain : _tileSpan;
+                _diffPushedPixels += (uint32_t)used * (uint32_t)(columns ? _regionH : _regionW);
                 dbIndex ^= 1;
                 // Single buffer: the same sprite is reused for the next tile, so
                 // we must not start overwriting it until this tile's DMA has
@@ -931,19 +1103,22 @@ protected:
     }
 
 private:
-    // Decide tile height from config + surface size. SPEC §10.1 priority:
-    // memoryLimit > splitCount > tileHeight > default tile budget (size-aware).
-    int32_t computeTileHeight(int32_t W, int32_t H, int bits) const
+    // Decide the tile span *along the split axis* (tile height for rows, tile
+    // width for columns) from config + surface size. SPEC §10.1 priority:
+    // memoryLimit > splitCount > tileHeight/tileWidth > default tile budget.
+    int32_t computeTileSpan(int32_t W, int32_t H, int bits) const
     {
+        const bool columns = (_splitAxis == LGFXVirtualSplitAxis::Columns);
+        const int32_t axisLength = columns ? W : H;
         if (_memLimit > 0)
-            return tileHForBudget(W, H, bits, _memLimit);
+            return tileSpanForBudget(W, H, bits, _memLimit, columns);
         if (_splitCount > 0)
-            return (H + _splitCount - 1) / _splitCount;
-        if (_tileHeightCfg > 0)
-            return (_tileHeightCfg > H) ? H : _tileHeightCfg;
+            return (axisLength + _splitCount - 1) / _splitCount;
+        if (_tileSpanCfg > 0)
+            return (_tileSpanCfg > axisLength) ? axisLength : _tileSpanCfg;
         // Nothing set: derive split from the default per-tile budget so it scales
         // with surface size (small → 1 tile, full screen → several). See SPEC §10.1.
-        return tileHForBudget(W, H, bits, DEFAULT_TILE_BYTES);
+        return tileSpanForBudget(W, H, bits, DEFAULT_TILE_BYTES, columns);
     }
 
     void freeDiffHash(void)
@@ -1002,10 +1177,23 @@ private:
         out[1] = h1;
     }
 
-    // Largest tile height whose row span fits @p budget bytes, clamped to H.
-    // Returns 0 if a single row already exceeds the budget (cannot satisfy).
-    static int32_t tileHForBudget(int32_t W, int32_t H, int bits, size_t budget)
+    // Largest tile span along the split axis that fits @p budget bytes, clamped
+    // to the surface. Returns 0 if even a one-pixel-wide slice exceeds the
+    // budget (cannot satisfy → treated as an allocation failure, no rounding).
+    static int32_t tileSpanForBudget(int32_t W, int32_t H, int bits, size_t budget, bool columns)
     {
+        if (columns)
+        {
+            // A column tile is span × H, so the budget first has to cover H rows;
+            // what is left per row converts to pixels of span. (LGFX pads each
+            // row to a byte boundary at < 8 bpp; that padding only ever makes the
+            // real allocation smaller than this estimate at span 1.)
+            const size_t rowBudget = budget / (size_t)H;
+            int32_t tw = (int32_t)((rowBudget * 8) / (size_t)bits);
+            if (tw < 1)
+                return 0;
+            return (tw > W) ? W : tw;
+        }
         const size_t bytesPerRow = ((size_t)W * (size_t)bits + 7) / 8;
         if (bytesPerRow == 0)
             return 0;
@@ -1027,9 +1215,11 @@ protected:
     // config
     size_t _memLimit = 0;
     int _splitCount = 0;
-    int _tileHeightCfg = 0;
+    int _tileSpanCfg = 0; // fixed tile height (rows) / width (columns)
     uint32_t _bgColor = 0; // black
     bool _autoClear = true;
+    bool _usePsram = false;
+    LGFXVirtualSplitAxis _splitAxis = LGFXVirtualSplitAxis::Rows;
     DBMode _dbMode = DBMode::Auto;
     bool _doubleBuffer = false; // resolved effective mode (set in beginRegion)
     LGFXVirtualDiffMode _diffMode = LGFXVirtualDiffMode::Off;
@@ -1052,6 +1242,8 @@ protected:
     // computed state
     int32_t _regionW = 0;
     int32_t _regionH = 0;
+    int32_t _tileSpan = 0; // extent along the split axis (= _tileHeight for rows)
+    int32_t _tileWidth = 0;
     int32_t _tileHeight = 0;
     int _tileCount = 0;
     bool _ready = false;
