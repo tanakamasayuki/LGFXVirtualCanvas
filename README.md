@@ -239,6 +239,60 @@ Granularity is whole tiles only. Tile height is derived from the memory budget,
 so it gets finer automatically on large panels (Full HD / 16bpp at the default
 budget gives a 5-row tile = 1/216 of the screen). See [SPEC.md §21](SPEC.md).
 
+## Overlays and dialogs with transparent transfer
+
+To draw a dialog over a screen you want to keep, render it as an **overlay**:
+`renderTransparent()` fills the tile with a transparent color and transfers only
+the pixels you drew over it, so the rest of the panel is left as it is.
+
+```cpp
+LGFXVirtualScreen base(lcd);      // the screen underneath
+LGFXVirtualScreen overlay(lcd);   // the dialog layer
+
+void drawDialog(LGFXVirtualCanvas& g) {   // no fillScreen: undrawn = see-through
+    g.fillRoundRect(40, 70, 160, 90, 12, TFT_DARKGREY);
+    g.drawRoundRect(40, 70, 160, 90, 12, TFT_WHITE);
+    g.drawString("Are you sure?", 52, 84);
+}
+
+base.render(drawScene);              // the screen stays on the panel...
+overlay.renderTransparent(drawDialog);  // ...and only the dialog is sent
+```
+
+The rounded corners keep showing the screen below — that is the point. **If your
+overlay is a plain rectangle you do not need this**: an `LGFXVirtualSprite`
+placed on the dialog already transfers only that rectangle, and it is faster.
+The best combination for a shaped dialog is both — a sprite on the dialog's
+bounding box, pushed transparently:
+
+```cpp
+LGFXVirtualSprite dialog(lcd, 160, 90, 40, 70);
+dialog.renderTransparent(drawDialog);   // local coords, only this box is scanned
+```
+
+Every `render(...)` form has a `renderTransparent(...)` twin with the same
+arguments. Plain `render()` is completely unaffected.
+
+The transparent color defaults to `TFT_TRANSPARENT` (RGB565 `0x0120`). Change it
+only if your drawing genuinely uses that color:
+
+```cpp
+overlay.setTransparentColor(lcd.color565(1, 2, 3));
+```
+
+> ⚠️ **Colors are read according to their C++ type**, exactly as everywhere else
+> in LovyanGFX: `int` / `uint16_t` (the `TFT_*` constants, `color565()`) is
+> RGB565, while `uint32_t` is RGB888. `setTransparentColor(TFT_TRANSPARENT)` and
+> `setTransparentColor((uint32_t)0x002400)` therefore mean the same color, but
+> `setTransparentColor((uint32_t)0x0120)` does not.
+
+Cost: the masked transfer walks one scanline at a time and issues a window setup
+per run of visible pixels, so it is slower **per pixel** than `render()` — it wins
+by sending far fewer of them (a fully transparent scanline costs no bus traffic at
+all). The draw callback still runs for every tile. Combined with diff transfer,
+one extra rule applies: after anything redraws what is *underneath* the overlay,
+call `overlay.invalidate()`. See [SPEC.md §22](SPEC.md).
+
 ## API
 
 ### `LGFXVirtualScreen` — the manager
@@ -254,9 +308,11 @@ budget gives a 5-row tile = 1/216 of the screen). See [SPEC.md §21](SPEC.md).
 | `LGFXVirtualSplitAxis splitAxis() const` | Current split axis. |
 | `void setUsePsram(bool enable)` | Allocate the tile buffer(s) in PSRAM (default off). Slower memory, no DMA (auto double-buffering turns off), falls back to internal RAM if unavailable. See SPEC §10.9. |
 | `bool usePsram() const` / `bool tileIsPsram() const` | What was requested / where the buffer actually landed. |
-| `void setBackgroundColor(uint32_t color)` | auto-clear color (default black). |
+| `void setBackgroundColor(uint32_t color)` | auto-clear color (default black). Not used by `renderTransparent*()`. |
 | `void setAutoClear(bool enable)` | Clear each tile before draw (default `true`). |
 | `void setDoubleBuffer(bool enable)` | Use two tile buffers so a tile's DMA transfer overlaps the next tile's draw (faster, 2× tile RAM). Overrides the default **auto** mode (on when ≥ 2 tiles, off for a single tile). See SPEC §10.5. |
+| `void setTransparentColor(color)` | Color `renderTransparent*()` leaves out of the transfer (default `TFT_TRANSPARENT` = RGB565 `0x0120`). Read according to the value's C++ type. See SPEC §22.4. |
+| `uint32_t transparentColor() const` | Current transparent color, as RGB888. |
 | `void setDiffMode(LGFXVirtualDiffMode mode)` | Diff-transfer granularity: `Off` (default) or `Tile` (skip transferring tiles unchanged since the previous render). Reduces transfer only. See SPEC §21. |
 | `LGFXVirtualDiffMode diffMode() const` | Current diff-transfer mode. |
 | `void invalidate()` | Declare that the panel content can no longer be trusted (the next `render()` transfers every tile). Call it whenever something other than this object touched the screen. |
@@ -267,6 +323,7 @@ budget gives a 5-row tile = 1/216 of the screen). See [SPEC.md §21](SPEC.md).
 | `int tileCount() const` / `int tileHeight() const` / `int tileWidth() const` / `int tileSpan() const` | Resolved geometry after allocation (`tileSpan` = the extent along the split axis). |
 | `bool render(draw)` | Render `void draw(LGFXVirtualCanvas&)`. |
 | `bool render(draw, ctx)` | Render `void draw(LGFXVirtualCanvas&, T&)` with your `ctx`. |
+| `bool renderTransparent(draw)` / `renderTransparent(draw, ctx)` | Same, as an overlay: the tile starts filled with `transparentColor()` and those pixels are not transferred. See SPEC §22. |
 
 `render` returns `false` (and draws nothing) if the buffer is not allocated.
 The draw callback must be a **function pointer** (capturing lambdas /
@@ -287,6 +344,7 @@ Same configuration and `render(...)` overloads as `LGFXVirtualScreen`, plus:
 | `int x()` / `int y()` / `int width()` / `int height()` | Current position / size. |
 | `bool render(draw)` / `render(draw, x, y)` | Draw at the current / given position. `(x, y)` also updates the stored position. |
 | `bool render(draw, ctx)` / `render(draw, ctx, x, y)` | Typed-context variants. |
+| `bool renderTransparent(draw)` / `(draw, x, y)` / `(draw, ctx)` / `(draw, ctx, x, y)` | Overlay versions of each `render` form: `transparentColor()` pixels are not transferred. See SPEC §22. |
 
 Inside the draw callback, coordinates are **local to the sprite** (0,0 = its
 top-left), and `g.width()/g.height()` return the sprite size.
@@ -419,7 +477,8 @@ code path proves correctness. Rationale in [SPEC.md §6](SPEC.md).
 See [examples/](examples/): `HelloWorld`, `BouncingBall` (state + animation),
 `MemoryBudget` (budget + failure handling), `Viewport`
 (`LGFXVirtualSprite` partial update), `DiffTransfer` (diff transfer),
-`ColumnSplit` (column tiles + PSRAM buffers), `LovyanGFX_Basic`.
+`ColumnSplit` (column tiles + PSRAM buffers), `Dialog` (transparent overlay),
+`LovyanGFX_Basic`.
 
 ## Testing
 

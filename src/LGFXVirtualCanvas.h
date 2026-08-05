@@ -836,6 +836,9 @@ public:
 #endif
     }
     /// @brief Set the auto-clear background color (default black / 0).
+    ///
+    /// Not used by the `renderTransparent*()` family — those clear the tile with
+    /// transparentColor() instead (SPEC §22.3).
     void setBackgroundColor(uint32_t color) { _bgColor = color; _diffValid = false; }
     /// @brief Enable/disable clearing each tile before draw (default enabled). See SPEC §11.
     void setAutoClear(bool enable) { _autoClear = enable; _diffValid = false; }
@@ -857,6 +860,37 @@ public:
     void setDoubleBuffer(bool enable) { _dbMode = enable ? DBMode::On : DBMode::Off; _dirty = true; }
     /// @brief Whether double-buffering is active (resolved at begin(); false before allocation).
     bool doubleBuffer(void) const { return _doubleBuffer; }
+
+    /// @brief Default transparent color: RGB565 `0x0120`, the same value
+    ///        LovyanGFX exposes as `TFT_TRANSPARENT`. See SPEC §22.4.
+    ///
+    /// Typed `int` on purpose, so passing it anywhere a color is expected means
+    /// RGB565 — exactly like `TFT_TRANSPARENT` itself (see setTransparentColor()
+    /// for why the C++ type matters). A dark green nothing picks by accident.
+    static constexpr int DEFAULT_TRANSPARENT_COLOR = 0x0120;
+
+    /// @brief Set the color the `renderTransparent*()` family treats as "do not
+    ///        transfer" (default ::DEFAULT_TRANSPARENT_COLOR).
+    ///
+    /// Only meaningful for the `renderTransparent*()` family; plain `render()`
+    /// ignores it entirely. Takes effect on the next render (no reallocation).
+    ///
+    /// @param color Interpreted exactly like a color argument of any other
+    ///        drawing call, i.e. **by its C++ type**: `uint32_t` is RGB888,
+    ///        while `int` / `uint16_t` (`TFT_*` constants, `color565()` results)
+    ///        is RGB565. Stored canonically as RGB888, which round-trips
+    ///        losslessly, so the same constant you draw with is the one masked.
+    ///
+    /// @note What must not collide is the **converted** value at the tile's color
+    ///       depth: a pixel your callback draws is left out of the transfer when
+    ///       it converts to the same value this color does. So at 8 bpp
+    ///       (`rgb332`) far more colors collapse onto it than at 16 bpp, and at a
+    ///       palette depth (4/8 bpp with a palette) it is a palette *index*.
+    ///       Choose a color your drawing never produces. @see SPEC §22.4
+    template <typename T>
+    void setTransparentColor(const T &color) { _transpColor = lgfx::v1::convert_to_rgb888(color); }
+    /// @brief Current transparent color as RGB888. @see setTransparentColor()
+    uint32_t transparentColor(void) const { return _transpColor; }
 
     /// @brief Set the diff-transfer granularity (default ::LGFXVirtualDiffMode::Off).
     ///
@@ -889,6 +923,9 @@ public:
     /// @brief Hash table size in bytes (0 when diffing is off / not allocated).
     size_t diffMemoryUsage(void) const { return _diffHashBytes; }
     /// @brief Pixels actually transferred by the last render (surface pixels).
+    /// @note After a `renderTransparent*()` this is an **upper bound**: it counts
+    ///       the pixels of every tile that was pushed, while the transparent-color
+    ///       pixels inside those tiles never reach the panel (SPEC §22.6).
     uint32_t diffPushedPixels(void) const { return _diffPushedPixels; }
     /// @brief Pixels the last render would have transferred without diffing.
     uint32_t diffTotalPixels(void) const { return _diffTotalPixels; }
@@ -905,6 +942,15 @@ public:
     int tileSpan(void) const { return _tileSpan; }
 
 protected:
+    // How one render() pushes its tiles. Deliberately *not* part of the public
+    // API: the public surface is a pair of method names (render() /
+    // renderTransparent()), so the mode never appears at a call site (SPEC §22.2).
+    enum class Transfer : uint8_t
+    {
+        Opaque,      // every pixel is transferred (the original behavior)
+        Transparent, // _transpColor pixels are not transferred
+    };
+
     LGFXVirtualTiledBase(LovyanGFX &panel) : _panel(&panel), _tile(&panel), _tile2(&panel) {}
     // Non-virtual (SPEC §6.3: no virtual anywhere) and protected, so a derived
     // object cannot be deleted through a base pointer. Frees the hash table.
@@ -1020,8 +1066,11 @@ protected:
     /// tile and any screen-edge overhang are clipped automatically. The only
     /// templated piece is the thin per-tile dispatch; clear/push stay
     /// non-template (SPEC §5.4).
+    ///
+    /// @param transfer ::Transfer::Transparent makes the tile start out filled
+    ///        with _transpColor and pushed with that color masked out (SPEC §22).
     template <typename F>
-    bool renderRegion(int32_t regionW, int32_t regionH, int32_t posX, int32_t posY, F &&drawFn)
+    bool renderRegion(int32_t regionW, int32_t regionH, int32_t posX, int32_t posY, Transfer transfer, F &&drawFn)
     {
         if (!_ready || _dirty || _regionW != regionW || _regionH != regionH)
         {
@@ -1036,6 +1085,16 @@ protected:
             _diffValid = false;
         _lastPosX = posX;
         _lastPosY = posY;
+        // The transparent color takes part in what the panel ends up showing, so
+        // it belongs to the automatically-watched state: the same tile content
+        // masked with a different color (or not masked at all) composites to a
+        // different image, and a skip based on the old hash would be wrong.
+        // One value covers both "mode changed" and "color changed" (SPEC §22.5).
+        const bool transparent = (transfer == Transfer::Transparent);
+        const uint32_t effTransp = transparent ? _transpColor : TRANSP_NONE;
+        if (effTransp != _lastEffTransp)
+            _diffValid = false;
+        _lastEffTransp = effTransp;
         _diffPushedPixels = 0;
         _diffTotalPixels = (uint32_t)_regionW * (uint32_t)_regionH;
         // Batch all tile transfers into one bus transaction. Drawing into the
@@ -1063,7 +1122,7 @@ protected:
             // transferred two pushes ago) is guaranteed free of in-flight DMA.
             LGFX_Sprite &buf = (_doubleBuffer && dbIndex) ? _tile2 : _tile;
             if (_autoClear)
-                buf.fillScreen(_bgColor);
+                buf.fillScreen(transparent ? _transpColor : _bgColor);
             LGFXVirtualCanvas g(buf, offsetX, offsetY, _regionW, _regionH);
             drawFn(g);
             // Diff transfer (SPEC §21): hash the drawn tile and skip the push
@@ -1081,7 +1140,15 @@ protected:
             }
             if (push)
             {
-                buf.pushSprite(_panel, posX + offsetX, posY + offsetY);
+                // The transparent push takes LovyanGFX's masked path
+                // (Panel_LCD::writeImage() with param->transp set): one scanline
+                // at a time, skipping transparent pixels and issuing a window +
+                // write per remaining run. A fully transparent scanline costs no
+                // bus traffic at all — see SPEC §22.6.
+                if (transparent)
+                    buf.pushSprite(_panel, posX + offsetX, posY + offsetY, _transpColor);
+                else
+                    buf.pushSprite(_panel, posX + offsetX, posY + offsetY);
                 // Extent of this tile inside the surface (the last tile may be
                 // partial); the panel clip rect discards the rest.
                 const int32_t axisRemain = (columns ? _regionW : _regionH) - offset;
@@ -1217,6 +1284,9 @@ protected:
     int _splitCount = 0;
     int _tileSpanCfg = 0; // fixed tile height (rows) / width (columns)
     uint32_t _bgColor = 0; // black
+    // Transparent color, stored as RGB888 so it is depth-independent (converted
+    // per push by LovyanGFX). Only read by a Transfer::Transparent render.
+    uint32_t _transpColor = lgfx::v1::convert_to_rgb888((int)DEFAULT_TRANSPARENT_COLOR);
     bool _autoClear = true;
     bool _usePsram = false;
     LGFXVirtualSplitAxis _splitAxis = LGFXVirtualSplitAxis::Rows;
@@ -1231,7 +1301,13 @@ protected:
     bool _diffValid = false;
     uint32_t _diffPushedPixels = 0;
     uint32_t _diffTotalPixels = 0;
+    // "No transparency" marker for _lastEffTransp. Bit 24 is outside the RGB888
+    // range, so it can never equal a real _transpColor — the same trick
+    // LovyanGFX uses for pixelcopy_t::NON_TRANSP.
+    static constexpr uint32_t TRANSP_NONE = 1u << 24;
+
     // Panel/placement attributes watched for automatic invalidation.
+    uint32_t _lastEffTransp = TRANSP_NONE; // transparent color used by the last render
     int32_t _lastPosX = 0;
     int32_t _lastPosY = 0;
     uint8_t _lastRotation = 0;
@@ -1272,20 +1348,52 @@ public:
     /// @return true if drawn; false if not allocated (then nothing is drawn).
     bool render(DrawRaw draw, void *ctx = nullptr)
     {
-        return renderRegion(_panel->width(), _panel->height(), 0, 0,
+        return renderRegion(_panel->width(), _panel->height(), 0, 0, Transfer::Opaque,
                             [&](LGFXVirtualCanvas &g) { draw(g, ctx); });
     }
     /// @brief Render via a `void(LGFXVirtualCanvas&)` callback.
     bool render(void (*draw)(LGFXVirtualCanvas &g))
     {
-        return renderRegion(_panel->width(), _panel->height(), 0, 0,
+        return renderRegion(_panel->width(), _panel->height(), 0, 0, Transfer::Opaque,
                             [&](LGFXVirtualCanvas &g) { draw(g); });
     }
     /// @brief Render via a typed `void(LGFXVirtualCanvas&, T&)` callback with your @p ctx.
     template <typename T>
     bool render(void (*draw)(LGFXVirtualCanvas &g, T &ctx), T &ctx)
     {
-        return renderRegion(_panel->width(), _panel->height(), 0, 0,
+        return renderRegion(_panel->width(), _panel->height(), 0, 0, Transfer::Opaque,
+                            [&](LGFXVirtualCanvas &g) { draw(g, ctx); });
+    }
+
+    /// @brief Render as an overlay: same as render(DrawRaw, void*), except the
+    ///        tile starts filled with transparentColor() and pixels still holding
+    ///        that color are not transferred. See SPEC §22.
+    ///
+    /// What is already on the panel therefore shows through, which is how a
+    /// non-rectangular overlay (a rounded dialog, a shadow, scattered widgets) is
+    /// drawn over an existing image without redrawing it. The transfer is slower
+    /// per pixel than render() but sends far fewer pixels; the draw callback still
+    /// runs for every tile. `setBackgroundColor()` is not used.
+    ///
+    /// @note The panel now holds a composite of two layers, which extends the
+    ///       diff-transfer contract: whatever is drawn *underneath* this overlay
+    ///       must be followed by invalidate() here. @see SPEC §22.5
+    bool renderTransparent(DrawRaw draw, void *ctx = nullptr)
+    {
+        return renderRegion(_panel->width(), _panel->height(), 0, 0, Transfer::Transparent,
+                            [&](LGFXVirtualCanvas &g) { draw(g, ctx); });
+    }
+    /// @brief Overlay render via a `void(LGFXVirtualCanvas&)` callback. @see renderTransparent(DrawRaw, void*)
+    bool renderTransparent(void (*draw)(LGFXVirtualCanvas &g))
+    {
+        return renderRegion(_panel->width(), _panel->height(), 0, 0, Transfer::Transparent,
+                            [&](LGFXVirtualCanvas &g) { draw(g); });
+    }
+    /// @brief Overlay render via a typed callback with your @p ctx. @see renderTransparent(DrawRaw, void*)
+    template <typename T>
+    bool renderTransparent(void (*draw)(LGFXVirtualCanvas &g, T &ctx), T &ctx)
+    {
+        return renderRegion(_panel->width(), _panel->height(), 0, 0, Transfer::Transparent,
                             [&](LGFXVirtualCanvas &g) { draw(g, ctx); });
     }
 };
@@ -1325,20 +1433,20 @@ public:
     /// @brief Render at the current position.
     bool render(void (*draw)(LGFXVirtualCanvas &g))
     {
-        return renderRegion(_w, _h, _x, _y, [&](LGFXVirtualCanvas &g) { draw(g); });
+        return renderRegion(_w, _h, _x, _y, Transfer::Opaque, [&](LGFXVirtualCanvas &g) { draw(g); });
     }
     /// @brief Render at panel (@p x, @p y); also updates the current position.
     bool render(void (*draw)(LGFXVirtualCanvas &g), int x, int y)
     {
         _x = x;
         _y = y;
-        return renderRegion(_w, _h, _x, _y, [&](LGFXVirtualCanvas &g) { draw(g); });
+        return renderRegion(_w, _h, _x, _y, Transfer::Opaque, [&](LGFXVirtualCanvas &g) { draw(g); });
     }
     /// @brief Render at the current position with typed @p ctx.
     template <typename T>
     bool render(void (*draw)(LGFXVirtualCanvas &g, T &ctx), T &ctx)
     {
-        return renderRegion(_w, _h, _x, _y, [&](LGFXVirtualCanvas &g) { draw(g, ctx); });
+        return renderRegion(_w, _h, _x, _y, Transfer::Opaque, [&](LGFXVirtualCanvas &g) { draw(g, ctx); });
     }
     /// @brief Render at panel (@p x, @p y) with typed @p ctx; also updates the current position.
     template <typename T>
@@ -1346,12 +1454,55 @@ public:
     {
         _x = x;
         _y = y;
-        return renderRegion(_w, _h, _x, _y, [&](LGFXVirtualCanvas &g) { draw(g, ctx); });
+        return renderRegion(_w, _h, _x, _y, Transfer::Opaque, [&](LGFXVirtualCanvas &g) { draw(g, ctx); });
     }
     /// @brief Render via a raw `void(LGFXVirtualCanvas&, void*)` callback at the current position.
     bool render(DrawRaw draw, void *ctx = nullptr)
     {
-        return renderRegion(_w, _h, _x, _y, [&](LGFXVirtualCanvas &g) { draw(g, ctx); });
+        return renderRegion(_w, _h, _x, _y, Transfer::Opaque, [&](LGFXVirtualCanvas &g) { draw(g, ctx); });
+    }
+
+    /// @brief Render as an overlay at the current position: same as render(), except
+    ///        the tile starts filled with transparentColor() and pixels still holding
+    ///        that color are not transferred, so the panel shows through. See SPEC §22.
+    ///
+    /// For a *rectangular* overlay this is not needed — a plain render() of a
+    /// sprite placed on the dialog already transfers only that rectangle. Reach for
+    /// this when the overlay is not rectangular (rounded corners, a shadow, glyphs
+    /// without a box). Placing the sprite on the overlay's bounding box and pushing
+    /// it transparently is the cheapest combination.
+    ///
+    /// @note The panel now holds a composite of two layers: after anything redraws
+    ///       what lies *underneath*, call invalidate(). @see SPEC §22.5
+    bool renderTransparent(void (*draw)(LGFXVirtualCanvas &g))
+    {
+        return renderRegion(_w, _h, _x, _y, Transfer::Transparent, [&](LGFXVirtualCanvas &g) { draw(g); });
+    }
+    /// @brief Overlay render at panel (@p x, @p y); also updates the current position. @see renderTransparent(void(*)(LGFXVirtualCanvas&))
+    bool renderTransparent(void (*draw)(LGFXVirtualCanvas &g), int x, int y)
+    {
+        _x = x;
+        _y = y;
+        return renderRegion(_w, _h, _x, _y, Transfer::Transparent, [&](LGFXVirtualCanvas &g) { draw(g); });
+    }
+    /// @brief Overlay render at the current position with typed @p ctx. @see renderTransparent(void(*)(LGFXVirtualCanvas&))
+    template <typename T>
+    bool renderTransparent(void (*draw)(LGFXVirtualCanvas &g, T &ctx), T &ctx)
+    {
+        return renderRegion(_w, _h, _x, _y, Transfer::Transparent, [&](LGFXVirtualCanvas &g) { draw(g, ctx); });
+    }
+    /// @brief Overlay render at panel (@p x, @p y) with typed @p ctx; also updates the current position. @see renderTransparent(void(*)(LGFXVirtualCanvas&))
+    template <typename T>
+    bool renderTransparent(void (*draw)(LGFXVirtualCanvas &g, T &ctx), T &ctx, int x, int y)
+    {
+        _x = x;
+        _y = y;
+        return renderRegion(_w, _h, _x, _y, Transfer::Transparent, [&](LGFXVirtualCanvas &g) { draw(g, ctx); });
+    }
+    /// @brief Overlay render via a raw callback at the current position. @see renderTransparent(void(*)(LGFXVirtualCanvas&))
+    bool renderTransparent(DrawRaw draw, void *ctx = nullptr)
+    {
+        return renderRegion(_w, _h, _x, _y, Transfer::Transparent, [&](LGFXVirtualCanvas &g) { draw(g, ctx); });
     }
 
 private:

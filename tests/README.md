@@ -19,6 +19,7 @@ Automated test suite for LGFXVirtualCanvas.
 - `pushimage/` — `pushImage` is split-invariant across tile boundaries.
 - `sprite/` — `LGFXVirtualSprite`: tiling correctness (incl. partial last tile), region containment, movable position.
 - `diff/` — Diff transfer (SPEC §21): output identical with diffing off vs on, zero transfer for an unchanged frame, only the changed tiles otherwise, `invalidate()`, sprite-move invalidation, `Off` allocates nothing.
+- `transparent/` — Transparent transfer (SPEC §22): the overlay is pixel-identical at every split count, on both axes and with/without double-buffering (split=1 = one masked full-surface push, i.e. the reference); the base layer really survives under a rounded dialog; a fully covering scene is unaffected; the transparent color's C++ type does not change what is masked; and switching mode or color invalidates the diff hash even when the tile bytes are identical.
 
 **Tier 2 — cross-library build + minimal parity:**
 

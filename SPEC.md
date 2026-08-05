@@ -507,6 +507,7 @@ Each case verifies pixel equality across several splits (e.g. 1/2/3/5/7).
 | T1-13 | diff transfer | output identical with diffing off vs on (i.e. it stays a transfer optimization); zero transfer for an unchanged frame, only the changed tiles otherwise, `invalidate()` behaviour, invalidation on `LGFXVirtualSprite` move, `Off` allocates nothing (§21.9) |
 | T1-14 | split axis | column tiles produce the same image as row tiles at every split count, single- and double-buffered, including the cursor-based text scenes (§10.8) |
 | T1-15 | column budget / PSRAM | the memory budget resolves a tile *width* under column splitting (maximal, full surface height, consistent tile count); a PSRAM request never fails the allocation and `tileIsPsram()` reports the actual placement (§10.8, §10.9) |
+| T1-16 | transparent transfer | the overlay is identical at every split count and on both axes (split=1 = one masked full-surface push); masking really keeps the base layer (rounded corners); a fully covering scene is unaffected; the color's C++ type does not change what is masked; mode/color switches invalidate the diff hash even when the tile bytes are identical (§22.9) |
 
 ### 13.5 Shared rules
 
@@ -795,6 +796,119 @@ Rides on the framework in §13.
 - **Skip volume**: draw identical content twice → `diffPushedPixels() == 0`. Change one tile → only that tile's worth.
 - **Boundary conditions**: `height % tileH != 0`, a single-tile configuration, after `LGFXVirtualSprite::setPosition()` moves, and color depths 8bpp / 24bpp (the trailing bytes of §21.4).
 - **Invalidation**: after drawing directly on the panel, both that the difference persists without `invalidate()` (i.e. behaves as specified) and that `invalidate()` restores it.
+
+## 22. Transparent transfer (overlay / dialog)
+
+An optional feature that leaves one nominated color out of the transfer, so what is already on the panel shows through. **It is off by default** and, unlike diff transfer (§21), costs no memory at all — it is selected per render by calling `renderTransparent()` instead of `render()`.
+
+### 22.1 Goal and deliberate limits
+
+The motivating case is a dialog: an existing screen stays where it is, and only the dialog is drawn on top. Filling the surface with a transparent color and transferring only what was drawn over it achieves that without a full-screen framebuffer.
+
+- **A rectangular overlay does not need this feature.** `LGFXVirtualSprite` placed on the dialog already redraws and transfers only that rectangle (§7.1), and it is faster. Transparent transfer is for overlays that are **not** rectangles: rounded corners, shadows, scattered widgets, glyphs without a box.
+- **This is not alpha blending.** It is color-key masking: a pixel either is transferred or is not. Semi-transparency would require reading the panel back (impossible on most panels) or a full framebuffer. `pushAlphaImage()`-based compositing is a separate, future feature (§22.8).
+- **It is slower per transferred pixel than `render()`** (§22.6), and the draw callback still runs for every tile. It pays off because it sends far fewer pixels, not because the transfer itself got cheaper.
+- **The library does not track layers.** Which layer is drawn when, and in what order, stays with the application. The library only refuses to transfer one color.
+
+### 22.2 API
+
+```cpp
+// LGFXVirtualTiledBase (shared by LGFXVirtualScreen / LGFXVirtualSprite)
+static constexpr int DEFAULT_TRANSPARENT_COLOR = 0x0120;  // == TFT_TRANSPARENT (RGB565)
+
+template <typename T> void setTransparentColor(const T& color);  // default: the above
+uint32_t transparentColor(void) const;                           // as RGB888
+
+// LGFXVirtualScreen / LGFXVirtualSprite: one renderTransparent() per render() form
+bool renderTransparent(void (*draw)(LGFXVirtualCanvas& g));
+bool renderTransparent(void (*draw)(LGFXVirtualCanvas& g, T& ctx), T& ctx);
+bool renderTransparent(DrawRaw draw, void* ctx = nullptr);
+// LGFXVirtualSprite additionally mirrors the positional forms (…, int x, int y)
+```
+
+**The color is state; whether a given frame is transparent is not.** They are split deliberately:
+
+- The color is a property of the *content* (which value the drawing never produces). It changes approximately never, and repeating a magic constant at every call site would be noise. It has a sensible default, so the common case never touches the setter at all.
+- Transparency is a property of *this frame* (a layer, or a whole image). Keeping it out of the object means a `render()` cannot inherit a leftover mode, which would otherwise fail silently: the frame would either lose its background or punch holes wherever the background color happened to match.
+
+**Why a separate method name rather than a `render()` argument** (a mode enum or a color parameter):
+
+1. `LGFXVirtualSprite::render()` already carries positional `x, y` and a `ctx`. A trailing mode argument produces `render(draw, state, 40, 80, Transparent)`, where nothing at the call site says what the numbers are. Moving the mode into the name removes the question.
+2. It is discoverable. Typing `render` offers `renderTransparent` in completion — the same reason §6.3 gives for a concrete class with only supported methods.
+3. The remaining pressure for an enum — future modes — does not materialize. A genuinely different composition (alpha) deserves its own name anyway, and tuning knobs (skipping fully transparent tiles, bounding-box clipping — §22.8) are not per-frame decisions and belong in setters, exactly like `setDiffMode()`.
+
+The mode is passed internally as a protected `Transfer { Opaque, Transparent }` enum on the render path, so adding a mode later does not change any public signature.
+
+### 22.3 Tile initialization
+
+`renderTransparent()` **auto-clears the tile with `transparentColor()`**, not with `setBackgroundColor()`. The draw callback therefore does nothing special: everything it does not draw shows the panel.
+
+The alternative — requiring the callback to fill with the transparent color itself — was rejected. The library has to know the color anyway (it is the value handed to the masked push), so the setter exists either way, and a forgotten fill would silently turn the overlay into an opaque full-surface transfer that erases the layer underneath.
+
+`setAutoClear(false)` combined with `renderTransparent()` leaves the previous tile's pixels in the buffer and is not a supported combination (the same "undefined initial content" rule as §11.1, with a worse failure mode: leftovers are opaque and do get transferred).
+
+### 22.4 The transparent color
+
+The default is RGB565 `0x0120`, the value LovyanGFX exposes as `TFT_TRANSPARENT`. It is typed `int` on purpose, so it means RGB565 wherever it is passed — see below.
+
+**The C++ type of a color decides how LovyanGFX reads it.** `color_conv_t::convert()` dispatches on the argument type: `uint32_t` is RGB888, while `int` / `int32_t` / `uint16_t` (all the `TFT_*` constants, `color565()` results) is RGB565. `setTransparentColor()` is therefore a template that preserves the type, canonicalizing to RGB888 for storage (`convert_to_rgb888()`); the RGB565 → RGB888 → depth round trip is lossless because the expansion replicates high bits. Without this, `setTransparentColor(TFT_TRANSPARENT)` would store `0x000120` as RGB888 — a *different* color from the `TFT_TRANSPARENT` the sketch draws with, which fails in the worst possible way: nothing is masked, so the overlay erases the layer below.
+
+What must not collide is the **converted value at the tile's color depth**: a pixel the callback draws is left out of the transfer when it converts to the same value as the transparent color. Consequences:
+
+- At 8 bpp (`rgb332`) many more colors collapse onto one value than at 16 bpp, so a color that is safe at 16 bpp may not be at 8 bpp.
+- With a palette depth (4/8 bpp with a palette) the value is a palette **index**; reserve one.
+- If no free color exists at all, the escape hatch is not a different color but a different mechanism: place an `LGFXVirtualSprite` on the overlay's bounding box (§22.1).
+
+### 22.5 Interaction with diff transfer, and invalidation
+
+The two features compose: the tile hash describes the tile *content*, and skipping an unchanged tile is as correct here as it is for an opaque transfer.
+
+What changes is the premise. Diff transfer assumes "not transferred" means the panel still shows what the hash describes (§21.5). With a transparent overlay the panel holds a **composite of two layers**, so the contract extends by one rule: **after anything redraws what lies underneath the overlay, call `invalidate()` on the overlay.** This is the same rule as §21.5 ("call it whenever something other than this object has touched the screen"); it simply now fires in the ordinary case, because the base layer is drawn by a different manager on purpose.
+
+Two things are detected automatically, on top of the §21.5 set:
+
+- switching between `render()` and `renderTransparent()`
+- changing `setTransparentColor()`
+
+Both are folded into one watched value: the transparent color of the last render, or an out-of-range marker (bit 24, the same trick as `pixelcopy_t::NON_TRANSP`) when it was opaque. This is load-bearing in a case the hash cannot see: when the auto-clear color equals the transparent color, `render()` and `renderTransparent()` build **byte-identical tiles** while producing different panels.
+
+### 22.6 How the masked transfer is performed
+
+The tile is pushed with `LGFX_Sprite::pushSprite(dst, x, y, transp)`, which reaches `Panel_LCD::writeImage()` with `param->transp` set (confirmed against LovyanGFX 1.2.21 / 1.2.26). That path is structurally different from the opaque one:
+
+- It walks **one scanline at a time**, using `fp_skip` to skip transparent pixels and, for each remaining run, copies the run into a DMA buffer, sets a window, and writes it.
+- **A fully transparent scanline costs no bus traffic at all** — only the skip scan. This is what makes a mostly-empty overlay cheap.
+- The cost is therefore "one window setup per run" plus a full scan of every tile, instead of one window setup per tile. Many short runs per row (a dotted pattern) is the bad case; a few solid rectangles is the good case.
+- Because each run is copied out of the sprite before being written, the tile buffer is not read by DMA in flight. Double-buffering consequently has nothing to gain in this mode — it is harmless, and the existing `waitDMA()` policy (§10.5) is left untouched rather than special-cased on an assumption about every panel implementation.
+
+`diffPushedPixels()` counts the pixels of the tiles that were pushed, so under `renderTransparent()` it is an **upper bound** on what reached the panel. Reporting the true figure would mean counting runs during the push, which LovyanGFX does not expose.
+
+### 22.7 Invariants
+
+1. **`render()` is untouched.** Any call that does not name `renderTransparent` behaves exactly as before, bit for bit. This is what makes the existing §13 test suite the regression test for this feature.
+2. **`split=1` is the reference implementation.** One tile means one full-surface masked push, i.e. exactly what hand-written LovyanGFX code would do. Every other split count and both split axes must be pixel-identical to it — the §13.2 method, applied to the masked transfer.
+3. **The transparent color is the only thing the library treats specially.** No second color, no alpha, no per-pixel callback.
+4. **§21.7-4 ("output pixels never change") is a diff-transfer invariant, not a global one.** Transparent transfer changes output pixels by design; that is why it is a separate feature with its own reference (invariant 2) instead of a diff-transfer mode.
+
+### 22.8 Future extension points
+
+Both hook into the "after draw" seam of §21.8 and are pure additions:
+
+- **Skip fully transparent tiles entirely.** A tile that is still all transparent needs no push. With diffing on this is nearly free (compare the tile hash against the hash of an all-transparent tile); standalone it is one linear scan.
+- **Clip the push to the drawn bounding box.** One pass to find the non-transparent extent, then `setClipRect()` before the push (§21.6 already establishes that clipping narrows what is actually sent). Reduces both the scan and the number of window setups.
+- **Alpha compositing** via `pushAlphaImage()`, as `renderAlpha()`. A different mechanism (it needs an alpha channel in the tile, i.e. `argb8888`), not a mode of this one.
+- **`LGFXVirtualCanvas::fillTransparent()`** — punching a hole back out of an already-drawn overlay requires the canvas to know the color, which it currently does not.
+
+### 22.9 Test policy
+
+Rides on the framework in §13; `tests/transparent/`.
+
+- **Output invariance (most important)**: the overlay rendered at split 1 / 3 / 7 / 13, on both axes, with and without double-buffering, must be pixel-identical (invariant 2). Plus 24 bpp, where the masked value takes a different conversion.
+- **Masking actually happened**: a rounded dialog's corner pixels must still show the base layer, and the dialog body must not.
+- **No effect where there is nothing to mask**: a fully covering scene pushed transparently equals the same scene pushed opaquely.
+- **Color typing**: the same color given as an RGB565 `TFT_*` constant and as an RGB888 `uint32_t` must mask the same pixels (§22.4).
+- **Diff composition**: an unchanged overlay transfers nothing; a mode switch and a color change each force a transfer — including the auto-clear-color-equals-transparent-color case, where the tile bytes are identical (§22.5).
+- **`LGFXVirtualSprite`**: a placed tiled sprite pushed transparently, single- and multi-tile, must agree and must not paint outside its shape.
 
 ## Appendix: LGFXBase → `LGFXVirtualCanvas` mapping (table)
 

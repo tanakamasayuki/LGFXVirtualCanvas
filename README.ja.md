@@ -231,6 +231,59 @@ Serial.printf("%u / %u px 転送\n",
 細かくなります（フルHD / 16bpp・既定予算ならタイル高 5 行＝画面の 1/216）。
 詳細は [SPEC.ja.md §21](SPEC.ja.md) を参照。
 
+## 透過転送でオーバーレイ／ダイアログを出す
+
+残しておきたい画面の上にダイアログを出すときは、**オーバーレイ**として描く。
+`renderTransparent()` はタイルを透過色で塗り、その上に描いた画素だけを転送するので、
+パネルの残りの部分はそのまま残る。
+
+```cpp
+LGFXVirtualScreen base(lcd);      // 下になる画面
+LGFXVirtualScreen overlay(lcd);   // ダイアログのレイヤ
+
+void drawDialog(LGFXVirtualCanvas& g) {   // fillScreen しない：描かない部分は透ける
+    g.fillRoundRect(40, 70, 160, 90, 12, TFT_DARKGREY);
+    g.drawRoundRect(40, 70, 160, 90, 12, TFT_WHITE);
+    g.drawString("Are you sure?", 52, 84);
+}
+
+base.render(drawScene);                 // 画面はパネルに残したまま…
+overlay.renderTransparent(drawDialog);  // …ダイアログだけを送る
+```
+
+角丸の角には下の画面が出たままになる。それがこの機能の目的である。
+**オーバーレイが単なる矩形なら、この機能は不要**：ダイアログ位置に置いた
+`LGFXVirtualSprite` なら、その矩形だけを転送できるし、そのほうが速い。
+形のあるダイアログでの最良の組み合わせは両方＝ダイアログの外接矩形に置いた
+スプライトを透過 push することである。
+
+```cpp
+LGFXVirtualSprite dialog(lcd, 160, 90, 40, 70);
+dialog.renderTransparent(drawDialog);   // ローカル座標。この矩形だけを走査する
+```
+
+`render(...)` の各形には、同じ引数の `renderTransparent(...)` が対応して存在する。
+通常の `render()` の挙動は一切変わらない。
+
+透過色の既定値は `TFT_TRANSPARENT`（RGB565 `0x0120`）。描画が本当にその色を
+使ってしまう場合だけ変更する。
+
+```cpp
+overlay.setTransparentColor(lcd.color565(1, 2, 3));
+```
+
+> ⚠️ **色は C++ の型に従って解釈される**（LovyanGFX の他の場所とまったく同じ）。
+> `int` / `uint16_t`（`TFT_*` 定数、`color565()` の戻り値）は RGB565、
+> `uint32_t` は RGB888 である。したがって
+> `setTransparentColor(TFT_TRANSPARENT)` と `setTransparentColor((uint32_t)0x002400)`
+> は同じ色を意味するが、`setTransparentColor((uint32_t)0x0120)` は違う色になる。
+
+コスト：マスク付き転送は 1 走査線ずつ処理し、見える画素の run ごとにウィンドウ設定を
+発行するので、**画素あたり**では `render()` より遅い。得をするのは送る画素数が大幅に
+減るからである（全透過の走査線はバス転送ゼロ）。描画コールバックは全タイルで走る。
+差分転送と併用する場合は規則が 1 つ増える：オーバーレイの**下**にあるものを何かが
+描き直したら `overlay.invalidate()` を呼ぶこと。[SPEC.ja.md §22](SPEC.ja.md) 参照。
+
 ## API
 
 ### `LGFXVirtualScreen` — マネージャ
@@ -246,9 +299,11 @@ Serial.printf("%u / %u px 転送\n",
 | `LGFXVirtualSplitAxis splitAxis() const` | 現在の分割軸。 |
 | `void setUsePsram(bool enable)` | タイルバッファを PSRAM に確保（既定 OFF）。メモリが遅く DMA も効かない（auto のダブルバッファは OFF に）。確保できなければ内蔵RAMにフォールバック。SPEC §10.9 参照。 |
 | `bool usePsram() const` / `bool tileIsPsram() const` | 要求した値 ／ 実際に確保された場所。 |
-| `void setBackgroundColor(uint32_t color)` | auto-clear の色（既定 黒）。 |
+| `void setBackgroundColor(uint32_t color)` | auto-clear の色（既定 黒）。`renderTransparent*()` では使われない。 |
 | `void setAutoClear(bool enable)` | draw 前に各タイルをクリア（既定 `true`）。 |
 | `void setDoubleBuffer(bool enable)` | タイルバッファを2枚使い、あるタイルの DMA 転送と次タイルの描画を重ねる（高速、タイルRAM 2倍）。既定の **auto**（2タイル以上で ON、1タイルで OFF）を上書きする。SPEC §10.5 参照。 |
+| `void setTransparentColor(color)` | `renderTransparent*()` が転送から除外する色（既定 `TFT_TRANSPARENT` = RGB565 `0x0120`）。値の C++ 型に従って解釈される。SPEC §22.4 参照。 |
+| `uint32_t transparentColor() const` | 現在の透過色（RGB888 で返る）。 |
 | `void setDiffMode(LGFXVirtualDiffMode mode)` | 差分転送の粒度。`Off`（既定）／`Tile`（前回と変化していないタイルの転送を省略）。転送のみ削減。SPEC §21 参照。 |
 | `LGFXVirtualDiffMode diffMode() const` | 現在の差分転送モード。 |
 | `void invalidate()` | パネルの内容が信用できなくなったことを通知（次の `render()` が全タイル転送）。自分以外が画面に触ったら呼ぶ。 |
@@ -259,6 +314,7 @@ Serial.printf("%u / %u px 転送\n",
 | `int tileCount() const` / `int tileHeight() const` / `int tileWidth() const` / `int tileSpan() const` | 確保後の確定ジオメトリ（`tileSpan` は分割軸方向の長さ）。 |
 | `bool render(draw)` | `void draw(LGFXVirtualCanvas&)` を描画。 |
 | `bool render(draw, ctx)` | `void draw(LGFXVirtualCanvas&, T&)` を `ctx` 付きで描画。 |
+| `bool renderTransparent(draw)` / `renderTransparent(draw, ctx)` | 同じものをオーバーレイとして描画。タイルは `transparentColor()` で塗られ、その色の画素は転送されない。SPEC §22 参照。 |
 
 `render` はバッファ未確保なら `false`（描画なし）。描画コールバックは
 **関数ポインタ**のみ（コードサイズ抑制のため、キャプチャ付きラムダ・
@@ -279,6 +335,7 @@ Serial.printf("%u / %u px 転送\n",
 | `int x()` / `int y()` / `int width()` / `int height()` | 現在位置／サイズ。 |
 | `bool render(draw)` / `render(draw, x, y)` | 現在位置／指定位置に描画。`(x,y)` 指定時は現在位置も更新。 |
 | `bool render(draw, ctx)` / `render(draw, ctx, x, y)` | 型付き ctx 版。 |
+| `bool renderTransparent(draw)` / `(draw, x, y)` / `(draw, ctx)` / `(draw, ctx, x, y)` | 各 `render` 形のオーバーレイ版。`transparentColor()` の画素は転送されない。SPEC §22 参照。 |
 
 描画コールバック内の座標は**スプライトのローカル**（0,0 = 左上）、`g.width()/g.height()`
 はスプライトのサイズを返します。
@@ -410,7 +467,8 @@ LovyanGFX には描画原点の平行移動が無く、プリミティブが非 
 
 [examples/](examples/) を参照：`HelloWorld`, `BouncingBall`（状態＋アニメ）,
 `MemoryBudget`（予算＋失敗処理）, `Viewport`（`LGFXVirtualSprite` 部分更新）,
-`DiffTransfer`（差分転送）, `ColumnSplit`（列分割＋PSRAM バッファ）, `LovyanGFX_Basic`。
+`DiffTransfer`（差分転送）, `ColumnSplit`（列分割＋PSRAM バッファ）,
+`Dialog`（透過オーバーレイ）, `LovyanGFX_Basic`。
 
 ## テスト
 

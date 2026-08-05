@@ -18,6 +18,7 @@ LGFXVirtualSplitAxis	KEYWORD1
 
 begin	KEYWORD2
 render	KEYWORD2
+renderTransparent	KEYWORD2
 isReady	KEYWORD2
 setPosition	KEYWORD2
 setMemoryLimit	KEYWORD2
@@ -33,6 +34,8 @@ setBackgroundColor	KEYWORD2
 setAutoClear	KEYWORD2
 setDoubleBuffer	KEYWORD2
 doubleBuffer	KEYWORD2
+setTransparentColor	KEYWORD2
+transparentColor	KEYWORD2
 setDiffMode	KEYWORD2
 diffMode	KEYWORD2
 invalidate	KEYWORD2
@@ -68,5 +71,6 @@ drawRightString	KEYWORD2
 #######################################
 
 DEFAULT_TILE_BYTES	LITERAL1
+DEFAULT_TRANSPARENT_COLOR	LITERAL1
 Rows	LITERAL1
 Columns	LITERAL1
