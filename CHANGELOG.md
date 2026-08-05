@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.4.0
 - (EN) Add transparent transfer: `renderTransparent(...)` mirrors every `render(...)` form and pushes the tile with one color masked out, so whatever is already on the panel shows through — a dialog can be drawn over a screen without redrawing it. The color is configured with `setTransparentColor()` / `transparentColor()` and defaults to `TFT_TRANSPARENT` (RGB565 `0x0120`); plain `render()` is bit-for-bit unaffected.
 - (JA) 透過転送を追加：`renderTransparent(...)` は `render(...)` の各形に対応し、1 色をマスクしてタイルを push する。すでにパネルに出ている絵が透けるので、画面を描き直さずにダイアログを重ねられる。色は `setTransparentColor()` / `transparentColor()` で設定し、既定は `TFT_TRANSPARENT`（RGB565 `0x0120`）。通常の `render()` の挙動はビット単位で不変。
 - (EN) Whether a frame is transparent is a per-render decision (a method name), while the color is state (a setter with a default): a leftover mode would silently erase the layer underneath, whereas the color is a property of the content and would be noise at every call site. The mode is a method name rather than a `render()` argument because `LGFXVirtualSprite::render()` already carries positional `x, y` and a `ctx`.
