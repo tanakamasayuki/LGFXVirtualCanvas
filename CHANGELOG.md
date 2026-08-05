@@ -1,6 +1,8 @@
 # Changelog / 変更履歴
 
 ## Unreleased
+
+## 1.3.0
 - (EN) Add a split axis: `setSplitAxis(LGFXVirtualSplitAxis::Columns)` cuts the surface into full-height vertical bands transferred left to right (for long strips / long-format printing), plus `splitAxis()`, `setTileWidth()`, `tileWidth()`, `tileSpan()`. `Rows` remains the default and the original behavior; the draw callback still works in full-surface coordinates and the output is pixel-identical on both axes (verified by `tests/parity`).
 - (JA) 分割軸を追加：`setSplitAxis(LGFXVirtualSplitAxis::Columns)` で面を「高さいっぱいの縦帯」に切り、左から右へ転送する（長尺帯・長尺印刷向け）。あわせて `splitAxis()`, `setTileWidth()`, `tileWidth()`, `tileSpan()` を追加。既定は従来どおり `Rows` で挙動は不変。描画コールバックは変わらず面全体の座標で書け、両軸の出力はピクセル一致する（`tests/parity` で検証）。
 - (EN) `LGFXVirtualCanvas` now carries an X offset alongside the Y offset and `width()` reports the surface width instead of the tile width. Column splitting also corrects the newline cursor (LovyanGFX resets it to the *tile's* left edge) and forces X text wrapping off, since wrapping at a tile boundary would make the output depend on the split count.
