@@ -1,4 +1,8 @@
-"""Tier 1 multi-scene parity: every split must equal split=1 for each scene."""
+"""Tier 1 multi-scene parity: every split must equal split=1 for each scene.
+
+Covers both split axes: row tiles (the default) and column tiles (SPEC §10.8),
+each single- and double-buffered.
+"""
 
 from pathlib import Path
 
@@ -37,7 +41,9 @@ def test_parity(dut):
         assert ref_path.stat().st_size > 100, f"{name}: reference missing"
         ref = Image.open(ref_path).convert("RGB")
         variants = [(f"{name}_split_{s}.png", f"split{s}") for s in SPLITS]
+        variants += [(f"{name}_col_{s}.png", f"col{s}") for s in SPLITS]
         variants += [(f"{name}_db_{s}.png", f"db{s}") for s in DB_SPLITS]
+        variants += [(f"{name}_coldb_{s}.png", f"coldb{s}") for s in DB_SPLITS]
         for fname, label in variants:
             img_path = out / fname
             assert img_path.exists(), f"missing {img_path}"

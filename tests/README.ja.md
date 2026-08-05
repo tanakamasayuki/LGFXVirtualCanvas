@@ -13,9 +13,9 @@ LGFXVirtualCanvas の自動テストスイート。
 
 **Tier 1 — 機能・正当性(LovyanGFX):**
 
-- `parity/` — 中核の不変条件: 同じ `drawScene()` を複数の分割数で描いた結果が **ピクセル完全一致** すること。複数シーン（図形・円・テキスト・境界・クリッピング・fuzz・アニメ）。不一致時は `*_full.png` / `*_virtual.png` / `*_diff.png` を保存
+- `parity/` — 中核の不変条件: 同じ `drawScene()` を複数の分割数・**両方の分割軸（行 / 列）** で描いた結果が **ピクセル完全一致** すること。複数シーン（図形・円・テキスト・境界・クリッピング・fuzz・アニメ）。不一致時は `*_full.png` / `*_virtual.png` / `*_diff.png` を保存
 - `autoclear/` — auto-clear の決定性・`setBackgroundColor`・`setAutoClear(false)`
-- `memory/` — `setMemoryLimit` のタイル高算出と確保失敗の扱い（フォールバック無し・`begin()`/`render()` が `false`）
+- `memory/` — `setMemoryLimit` のタイルスパン算出（行はタイル高、列はタイル幅）と確保失敗の扱い（フォールバック無し・`begin()`/`render()` が `false`）、および PSRAM 要求と内蔵RAMへのフォールバック
 - `pushimage/` — `pushImage` がタイル境界を跨いでも split 不変
 - `sprite/` — `LGFXVirtualSprite`：タイル分割の正しさ（端数タイル含む）・領域外不可侵・位置移動
 - `diff/` — 差分転送（SPEC §21）：差分の有無で出力一致・未変化フレームで転送 0・変化タイルのみ転送・`invalidate()`・スプライト移動での無効化・`Off` は確保 0

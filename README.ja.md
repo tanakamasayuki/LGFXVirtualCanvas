@@ -135,6 +135,42 @@ void setup() {
 > 極端に重いコールバックは少なく大きいタイルに（`setMemoryLimit` / `setSplitCount`）。
 > SPEC §10.7 参照。
 
+### 行ではなく列に分割する
+
+既定では面を横帯に切って上から下へ転送します。長尺印刷・ティッカー・横長波形など、
+**左から右へ**送り出したい対象では、面いっぱいの高さの**縦帯**に切り替えられます：
+
+```cpp
+screen.setSplitAxis(LGFXVirtualSplitAxis::Columns);  // 縦帯、左から右へ転送
+screen.setTileWidth(32);                             // 任意：列幅を固定
+```
+
+それ以外は何も変わりません。draw コールバックは従来どおり面全体の座標で書け、
+出力画像も行分割と同一です（parity テストがピクセル単位で検証しています）。
+影響を受けるのはテキストの折り返しだけです（[制限](#制限) 参照）。
+
+### タイルバッファを PSRAM に置く
+
+大きなパネルでは内蔵RAM既定だとタイル数が非常に多くなり、そのすべてで draw
+コールバックが再実行されます。`setUsePsram(true)` を使うと、遅いメモリと引き換えに
+「少なく大きいタイル」を選べます：
+
+```cpp
+screen.setUsePsram(true);
+screen.setMemoryLimit(2 * 1024 * 1024);   // 数百タイルではなく数タイルに
+screen.begin();
+if (!screen.tileIsPsram()) {              // PSRAM が無い/足りない → 内蔵RAMに確保された
+    Serial.println("fell back to internal RAM");
+}
+```
+
+これは速度とのトレードであり、無条件に速くなるわけではありません。PSRAM への描画も
+読み出しも遅く、LovyanGFX は PSRAM 上の sprite を DMA 無しで push するため、
+ダブルバッファは重ねる相手が無くなり auto では OFF に解決されます。コールバックが
+律速なら勝ち、転送が律速なら負ける ── 実測してください。PSRAM 要求で確保が失敗する
+ことはありません（内蔵RAMに確保され、`tileIsPsram()` がそれを報告します）。
+SPEC §10.9 参照。
+
 ## `LGFXVirtualSprite` で部分更新
 
 画面の一部だけ更新したいとき（ステータス領域・動くアイコン・固定ビューポート）は
@@ -204,7 +240,12 @@ Serial.printf("%u / %u px 転送\n",
 | `LGFXVirtualScreen(LovyanGFX& panel, int splitCount = 0)` | パネル上に構築。`0` = auto（≈ 19 KB/タイル予算）。この時点では未確保。 |
 | `void setMemoryLimit(size_t bytes)` | タイルバッファの上限。タイル高をここから算出（最優先）。 |
 | `void setSplitCount(int count)` | タイル数を固定。 |
-| `void setTileHeight(int height)` | タイル高（px）を固定。 |
+| `void setTileHeight(int height)` | タイル高（px）を固定（行分割）。 |
+| `void setTileWidth(int width)` | タイル幅（px）を固定（列分割）。`setTileHeight` と同一の内部設定。 |
+| `void setSplitAxis(LGFXVirtualSplitAxis axis)` | `Rows`（既定、横帯を上から下へ）／`Columns`（面いっぱいの高さの縦帯を左から右へ）。SPEC §10.8 参照。 |
+| `LGFXVirtualSplitAxis splitAxis() const` | 現在の分割軸。 |
+| `void setUsePsram(bool enable)` | タイルバッファを PSRAM に確保（既定 OFF）。メモリが遅く DMA も効かない（auto のダブルバッファは OFF に）。確保できなければ内蔵RAMにフォールバック。SPEC §10.9 参照。 |
+| `bool usePsram() const` / `bool tileIsPsram() const` | 要求した値 ／ 実際に確保された場所。 |
 | `void setBackgroundColor(uint32_t color)` | auto-clear の色（既定 黒）。 |
 | `void setAutoClear(bool enable)` | draw 前に各タイルをクリア（既定 `true`）。 |
 | `void setDoubleBuffer(bool enable)` | タイルバッファを2枚使い、あるタイルの DMA 転送と次タイルの描画を重ねる（高速、タイルRAM 2倍）。既定の **auto**（2タイル以上で ON、1タイルで OFF）を上書きする。SPEC §10.5 参照。 |
@@ -215,7 +256,7 @@ Serial.printf("%u / %u px 転送\n",
 | `uint32_t diffPushedPixels() const` / `uint32_t diffTotalPixels() const` | 直前の `render()` が実際に転送した画素数 ／ 差分なしなら転送していた画素数。 |
 | `bool begin()` | 今すぐ確保。失敗で `false`（フォールバック無し）。 |
 | `bool isReady() const` | 確保済みか。 |
-| `int tileCount() const` / `int tileHeight() const` | 確保後の確定ジオメトリ。 |
+| `int tileCount() const` / `int tileHeight() const` / `int tileWidth() const` / `int tileSpan() const` | 確保後の確定ジオメトリ（`tileSpan` は分割軸方向の長さ）。 |
 | `bool render(draw)` | `void draw(LGFXVirtualCanvas&)` を描画。 |
 | `bool render(draw, ctx)` | `void draw(LGFXVirtualCanvas&, T&)` を `ctx` 付きで描画。 |
 
@@ -223,8 +264,8 @@ Serial.printf("%u / %u px 転送\n",
 **関数ポインタ**のみ（コードサイズ抑制のため、キャプチャ付きラムダ・
 `std::function` は不可）。
 
-複数指定時の優先順位：`setMemoryLimit` ＞ `setSplitCount` ＞ `setTileHeight`
-＞ 既定（≈ 19 KB/タイル予算）。何も指定しない場合、面が 2 タイル以上に解決される
+複数指定時の優先順位：`setMemoryLimit` ＞ `setSplitCount` ＞
+`setTileHeight` / `setTileWidth` ＞ 既定（≈ 19 KB/タイル予算）。何も指定しない場合、面が 2 タイル以上に解決される
 ときはダブルバッファを自動で有効化します。
 
 ### `LGFXVirtualSprite` — タイル分割サブ領域
@@ -347,8 +388,12 @@ LovyanGFX には描画原点の平行移動が無く、プリミティブが非 
 
 ## 制限
 
-- **縦分割のみ。**
+- **分割は1次元のみ**：行（既定）または列であり、2次元グリッドではありません。
 - 描画コールバックは**関数ポインタのみ**（キャプチャ付きラムダ不可）。
+- **列分割ではテキストの折り返しが無効になります。** LovyanGFX はタイル sprite 自身の
+  右端で折り返すため、列分割ではタイル境界で折り返してしまい出力が分割数に依存します。
+  そのため列分割では `setTextWrap(true)` を無視し、長い行は折り返さずクリップします。
+  改行は面の左端に戻すよう補正しているので、`println` / `printf` は期待どおり動きます。
 - **タイル境界を跨ぐ近傍依存描画**（アンチエイリアス・smooth/wide line・
   ぼかし・近傍参照フィルタ）は全面描画と一致しない場合があります。
   各タイルが独立に再描画・クリップされるため。LovyanGFX の既定プリミティブは
@@ -365,7 +410,7 @@ LovyanGFX には描画原点の平行移動が無く、プリミティブが非 
 
 [examples/](examples/) を参照：`HelloWorld`, `BouncingBall`（状態＋アニメ）,
 `MemoryBudget`（予算＋失敗処理）, `Viewport`（`LGFXVirtualSprite` 部分更新）,
-`DiffTransfer`（差分転送）, `LovyanGFX_Basic`。
+`DiffTransfer`（差分転送）, `ColumnSplit`（列分割＋PSRAM バッファ）, `LovyanGFX_Basic`。
 
 ## テスト
 

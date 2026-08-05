@@ -10,6 +10,7 @@ LGFXVirtualScreen	KEYWORD1
 LGFXVirtualSprite	KEYWORD1
 LGFXVirtualCanvas	KEYWORD1
 LGFXVirtualDiffMode	KEYWORD1
+LGFXVirtualSplitAxis	KEYWORD1
 
 #######################################
 # Methods and Functions (KEYWORD2)
@@ -22,6 +23,12 @@ setPosition	KEYWORD2
 setMemoryLimit	KEYWORD2
 setSplitCount	KEYWORD2
 setTileHeight	KEYWORD2
+setTileWidth	KEYWORD2
+setSplitAxis	KEYWORD2
+splitAxis	KEYWORD2
+setUsePsram	KEYWORD2
+usePsram	KEYWORD2
+tileIsPsram	KEYWORD2
 setBackgroundColor	KEYWORD2
 setAutoClear	KEYWORD2
 setDoubleBuffer	KEYWORD2
@@ -34,6 +41,8 @@ diffPushedPixels	KEYWORD2
 diffTotalPixels	KEYWORD2
 tileCount	KEYWORD2
 tileHeight	KEYWORD2
+tileWidth	KEYWORD2
+tileSpan	KEYWORD2
 fillScreen	KEYWORD2
 drawPixel	KEYWORD2
 drawLine	KEYWORD2
@@ -59,3 +68,5 @@ drawRightString	KEYWORD2
 #######################################
 
 DEFAULT_TILE_BYTES	LITERAL1
+Rows	LITERAL1
+Columns	LITERAL1

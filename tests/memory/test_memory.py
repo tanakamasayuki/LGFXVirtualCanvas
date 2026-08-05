@@ -36,4 +36,29 @@ def test_memory(dut):
     assert (render, ready) == (1, 1), "guardrail should auto-allocate on first render"
     assert n == expected_n, f"default split count should be {expected_n} for the ~19KB/tile budget"
 
+    # column splitting: the budget bounds a full-height column, so it resolves a
+    # tile *width*; height is the whole surface (SPEC §10.8).
+    bytes_per_col = (H * bits + 7) // 8
+    g = _m(dut, r"COLUMNS limit=(\d+) begin=(\d) render=(\d) tw=(\d+) th=(\d+) span=(\d+) N=(\d+)")
+    limit, begin, render, tw, th, span, n = (int(x) for x in g)
+    assert (begin, render) == (1, 1), "column budget should allocate and render"
+    assert th == H, "a column tile spans the full surface height"
+    assert span == tw, "span is the tile width when splitting into columns"
+    assert tw * bytes_per_col <= limit, "tile width exceeds the budget"
+    assert (tw + 1) * bytes_per_col > limit or tw == W, "tile width is not maximal for the budget"
+    assert n == (W + tw - 1) // tw, "tile count inconsistent with tile width"
+
+    # split count applies to the split axis, whichever it is.
+    begin, tw, th, n = (int(x) for x in _m(dut, r"COLSPLIT begin=(\d) tw=(\d+) th=(\d+) N=(\d+)"))
+    assert begin == 1
+    assert (n, th) == (4, H), "4 full-height columns"
+    assert tw == (W + 3) // 4
+
+    # PSRAM: request is allowed to fall back to internal RAM (the host has no
+    # PSRAM), the render still succeeds, and tileIsPsram() reports the truth.
+    req, begin, render, actual, db = (int(x) for x in _m(dut, r"PSRAM request=(\d) begin=(\d) render=(\d) actual=(\d) db=(\d)"))
+    assert (req, begin, render) == (1, 1, 1), "a PSRAM request must never fail the allocation"
+    assert actual == 0, "the host backend has no PSRAM, so the fallback must be reported"
+    assert db == 1, "internal-RAM fallback keeps auto double-buffering for 3 tiles"
+
     dut.expect("TEST done", timeout=5)

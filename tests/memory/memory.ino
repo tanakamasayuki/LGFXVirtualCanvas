@@ -59,6 +59,42 @@ void setup()
                       rendered, screen.isReady(), screen.tileCount());
     }
 
+    // column splitting: the same budget now bounds a full-height column, so the
+    // span it buys is a tile *width* (SPEC §10.8).
+    {
+        const size_t lim = ((size_t)H * (size_t)bits + 7) / 8 * 20; // ~20 columns
+        LGFXVirtualScreen screen(lcd);
+        screen.setSplitAxis(LGFXVirtualSplitAxis::Columns);
+        screen.setMemoryLimit(lim);
+        const bool began = screen.begin();
+        const bool rendered = screen.render(sceneNoop);
+        Serial.printf("COLUMNS limit=%u begin=%d render=%d tw=%d th=%d span=%d N=%d\n",
+                      (unsigned)lim, began, rendered, screen.tileWidth(),
+                      screen.tileHeight(), screen.tileSpan(), screen.tileCount());
+    }
+
+    // column splitting by split count: N full-height columns, no leftover config.
+    {
+        LGFXVirtualScreen screen(lcd, 4);
+        screen.setSplitAxis(LGFXVirtualSplitAxis::Columns);
+        const bool began = screen.begin();
+        Serial.printf("COLSPLIT begin=%d tw=%d th=%d N=%d\n",
+                      began, screen.tileWidth(), screen.tileHeight(), screen.tileCount());
+    }
+
+    // PSRAM request: honoured where PSRAM exists, silently served from internal
+    // RAM otherwise (SPEC §10.9) — either way the render must succeed, and
+    // tileIsPsram() reports what actually happened.
+    {
+        LGFXVirtualScreen screen(lcd, 3);
+        screen.setUsePsram(true);
+        const bool began = screen.begin();
+        const bool rendered = screen.render(sceneNoop);
+        Serial.printf("PSRAM request=%d begin=%d render=%d actual=%d db=%d\n",
+                      screen.usePsram(), began, rendered, screen.tileIsPsram(),
+                      screen.doubleBuffer());
+    }
+
     Serial.println("TEST done");
 }
 
