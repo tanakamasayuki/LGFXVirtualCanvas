@@ -39,9 +39,10 @@ opt-in の2枚 ping-pong で、あるタイルの DMA 転送と次タイルの�
   サイズでどう動くかを可視化(無指定デフォルトの根拠にする)
 - **auto-clear**: ON(既定) vs OFF — `fillScreen` で全面を塗るシーンでの
   二重塗りコストを定量化(SPEC §11.1)
-- **バッファ配置**: 内蔵RAM vs PSRAM — **ベースラインのみ。** Phase 1 では
-  ライブラリに PSRAM 指定の公開 API が無い(`createSprite` は内蔵RAM既定)ため、
-  方式 C は内蔵RAMのみで計測。
+- **バッファ配置**: 内蔵RAM vs PSRAM — **ベースラインのみ。** このベンチは
+  `setUsePsram()`(後から追加。SPEC §10.9)より前のものなので、方式 C は
+  内蔵RAMのみで計測。PSRAM 列は方式 B のフルスプライトで、DMA 無しの push が
+  どれだけ高くつくかを示している。
 - **シーンの重さ**: `light`(転送律速)/ `heavy`(CPU律速)/ `image`
   (`pushImage`、メモリ帯域律速)
 

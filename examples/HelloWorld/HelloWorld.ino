@@ -9,7 +9,7 @@
 #include <M5Unified.h>
 #include <LGFXVirtualCanvas.h>
 
-LGFXVirtualScreen screen(M5.Display); // split count omitted = auto (3). Nothing allocated yet.
+LGFXVirtualScreen screen(M5.Display); // split count omitted = auto (~19 KB/tile). Nothing allocated yet.
 
 void drawScene(LGFXVirtualCanvas &g)
 {

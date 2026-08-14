@@ -16,6 +16,10 @@ void drawScene(LGFXVirtualCanvas& g) {
 }
 ```
 
+> **はじめての人へ**: なぜちらつくのか・なぜ全画面バッファが載らないのか・
+> タイル分割で何が変わるのかを原理から説明した
+> [docs/BEGINNERS_GUIDE.ja.md](docs/BEGINNERS_GUIDE.ja.md) があります。
+>
 > 設計の根拠と完全な仕様は [SPEC.ja.md](SPEC.ja.md) を参照。
 
 ## なぜ
@@ -52,7 +56,7 @@ lib_deps =
 #include <M5Unified.h>
 #include <LGFXVirtualCanvas.h>
 
-LGFXVirtualScreen screen(M5.Display);   // 分割数省略 = auto（3）
+LGFXVirtualScreen screen(M5.Display);   // 分割数省略 = auto（≈ 19 KB/タイル予算）
 
 void drawScene(LGFXVirtualCanvas& g) {
     g.fillScreen(TFT_NAVY);
@@ -469,6 +473,9 @@ LovyanGFX には描画原点の平行移動が無く、プリミティブが非 
 `MemoryBudget`（予算＋失敗処理）, `Viewport`（`LGFXVirtualSprite` 部分更新）,
 `DiffTransfer`（差分転送）, `ColumnSplit`（列分割＋PSRAM バッファ）,
 `Dialog`（透過オーバーレイ）, `LovyanGFX_Basic`。
+
+読む順番・各例の論点・ビルド方法は [examples/README.ja.md](examples/README.ja.md) に
+まとめてあります。
 
 ## テスト
 

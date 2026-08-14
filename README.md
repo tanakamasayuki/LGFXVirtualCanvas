@@ -17,6 +17,10 @@ void drawScene(LGFXVirtualCanvas& g) {
 }
 ```
 
+> **New to this?** [docs/BEGINNERS_GUIDE.md](docs/BEGINNERS_GUIDE.md) explains from first
+> principles why screens flicker, why a full-screen buffer does not fit, and what tiling
+> changes.
+>
 > For the design rationale and the full specification, see [SPEC.md](SPEC.md).
 
 ## Why
@@ -54,7 +58,7 @@ lib_deps =
 #include <M5Unified.h>
 #include <LGFXVirtualCanvas.h>
 
-LGFXVirtualScreen screen(M5.Display);   // split count omitted = auto (3)
+LGFXVirtualScreen screen(M5.Display);   // split count omitted = auto (~19 KB/tile budget)
 
 void drawScene(LGFXVirtualCanvas& g) {
     g.fillScreen(TFT_NAVY);
@@ -479,6 +483,9 @@ See [examples/](examples/): `HelloWorld`, `BouncingBall` (state + animation),
 (`LGFXVirtualSprite` partial update), `DiffTransfer` (diff transfer),
 `ColumnSplit` (column tiles + PSRAM buffers), `Dialog` (transparent overlay),
 `LovyanGFX_Basic`.
+
+[examples/README.md](examples/README.md) gives the reading order, the point each example
+makes, and how to build them.
 
 ## Testing
 

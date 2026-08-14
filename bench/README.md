@@ -37,9 +37,10 @@ transfer with the next tile's draw. See SPEC §10.5 for the mechanism.
   expose how the optimal split shifts with size (and to inform the no-arg default)
 - **auto-clear**: on (default) vs off — quantifies the double-fill cost when the
   scene already paints every pixel with `fillScreen` (SPEC §11.1)
-- **buffer placement**: internal RAM vs PSRAM — **baselines only.** The library
-  has no public PSRAM API in Phase 1 (`createSprite` defaults to internal RAM),
-  so method C is reported on internal RAM only.
+- **buffer placement**: internal RAM vs PSRAM — **baselines only.** This bench
+  predates `setUsePsram()` (added later; see SPEC §10.9), so method C is
+  reported on internal RAM only. The PSRAM column is method B's full sprite,
+  which is what shows the cost of a DMA-less push.
 - **scene weight**: `light` (transfer-bound) / `heavy` (CPU-bound) / `image`
   (`pushImage`, memory-bandwidth-bound)
 
