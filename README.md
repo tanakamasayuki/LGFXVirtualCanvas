@@ -23,6 +23,8 @@ void drawScene(LGFXVirtualCanvas& g) {
 >
 > For the design rationale and the full specification, see [SPEC.md](SPEC.md).
 
+Start with the [example workflow](docs/GUIDE_EXAMPLES.md) and [individual example READMEs](examples/README.md) for setup, API sequence, verification and adaptation notes.
+
 ## Why
 
 A full-screen double buffer (e.g. 320×240×2 = 150 KB) often does not fit in

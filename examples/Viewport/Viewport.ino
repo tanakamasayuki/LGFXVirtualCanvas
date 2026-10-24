@@ -1,12 +1,5 @@
-// Viewport — partial update with LGFXVirtualSprite (M5Unified).
-//
-// A tiled sub-region (a "viewport") is re-rendered every frame while the rest
-// of the screen (a title drawn once) is never touched. Inside the viewport you
-// draw in LOCAL coordinates (0,0 = viewport top-left); internally it is split
-// into tiles so it needs only a small buffer.
-//
-// Board: any M5 device (M5Unified / M5.Display).
-
+// en: Update a sprite region using local coordinates
+// ja: ローカル座標でSprite領域だけを更新する
 #include <M5Unified.h>
 #include <LGFXVirtualCanvas.h>
 
@@ -35,6 +28,8 @@ void setup()
     M5.Display.drawString("Static title (drawn once)", 20, 20); // outside the viewport
 
     view.setMemoryLimit(12 * 1024); // small tile buffer; the region is split internally
+    // en: Initialize this component after its prerequisites; inspect the returned status where provided.
+    // ja: 前提となる機器を準備してから初期化し、結果を返すAPIでは成否を確認します。
     view.begin();
 }
 
@@ -48,6 +43,8 @@ void loop()
     if (ball.y < 10 || ball.y > view.height() - 10)
         ball.vy = -ball.vy;
 
+    // en: Draw a stable scene snapshot; tiled rendering can invoke the callback repeatedly.
+    // ja: 同じ状態のSceneを描きます。タイル描画ではコールバックが複数回呼ばれます。
     view.render(drawView, ball); // only the 200x150 region is updated
     delay(16);
 }

@@ -1,11 +1,5 @@
-// LovyanGFX_Basic — using LGFXVirtualCanvas with plain LovyanGFX.
-//
-// Same library, non-M5 path: include LovyanGFX + LGFX_AUTODETECT, construct
-// your LGFX panel, and pass it to LGFXVirtualScreen. The draw function is
-// identical to the M5 examples — it only ever sees LGFXVirtualCanvas.
-//
-// Board: any LovyanGFX-supported display (auto-detected by LGFX_AUTODETECT).
-
+// en: Use a tiled screen with a plain LovyanGFX panel
+// ja: 通常のLovyanGFXパネルへタイル描画する
 #include <LovyanGFX.hpp>
 #include <LGFX_AUTODETECT.hpp>
 #include <LGFXVirtualCanvas.h>
@@ -26,6 +20,8 @@ void drawScene(LGFXVirtualCanvas &g)
 void setup()
 {
     lcd.init();               // panel size becomes known here
+    // en: Draw a stable scene snapshot; tiled rendering can invoke the callback repeatedly.
+    // ja: 同じ状態のSceneを描きます。タイル描画ではコールバックが複数回呼ばれます。
     screen.render(drawScene); // first render allocates the tile buffer
 }
 

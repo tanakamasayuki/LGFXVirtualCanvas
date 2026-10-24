@@ -68,3 +68,20 @@ Arduino IDE の場合は `.ino` を開き、ボードを選んでそのまま書
 分割数・ダブルバッファ・PSRAM が実機でどれだけ効くかは
 [bench/](../bench/) が測ります（Core2 / CoreS3、シリアルに表として出力）。
 分割数に依らず絵が一致することの検証は [tests/](../tests/) にあります（ホスト上でヘッドレス実行）。
+
+## 実行ガイドと個別README
+
+最初に[サンプル入門ガイド](../docs/GUIDE_EXAMPLES.ja.md)を読み、目的に合う例へ進んでください。
+
+最初の候補は[HelloWorld](HelloWorld/README.ja.md)です。必要な機器を確認し、対象が異なる場合は下の一覧から選び直してください。
+
+| 例 | 学ぶこと |
+|---|---|
+| [BouncingBall](BouncingBall/README.ja.md) | 状態を描画の外で更新してBallを動かす |
+| [ColumnSplit](ColumnSplit/README.ja.md) | 横方向の分割・Buffer・PSRAMの違いを調べる |
+| [Dialog](Dialog/README.ja.md) | 透過Dialogを描き、閉じるときに背景を戻す |
+| [DiffTransfer](DiffTransfer/README.ja.md) | 内容が変わらないタイルの転送を省く |
+| [HelloWorld](HelloWorld/README.ja.md) | 最初のタイル分割Screenを描く |
+| [LovyanGFX_Basic](LovyanGFX_Basic/README.ja.md) | 通常のLovyanGFXパネルへタイル描画する |
+| [MemoryBudget](MemoryBudget/README.ja.md) | タイルのメモリ予算と確保失敗を扱う |
+| [Viewport](Viewport/README.ja.md) | ローカル座標でSprite領域だけを更新する |

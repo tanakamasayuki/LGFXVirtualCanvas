@@ -1,11 +1,5 @@
-// HelloWorld — the smallest LGFXVirtualCanvas program (M5Unified).
-//
-// Draws to a virtual full-screen canvas split into tiles. You never see the
-// tiles, the offset, or the buffer: just draw in full-screen coordinates.
-//
-// Board: any M5 device (uses M5Unified / M5.Display). For plain LovyanGFX see
-// the LovyanGFX_Basic example.
-
+// en: Draw a first tiled full-screen scene
+// ja: 最初のタイル分割Screenを描く
 #include <M5Unified.h>
 #include <LGFXVirtualCanvas.h>
 
@@ -22,6 +16,8 @@ void drawScene(LGFXVirtualCanvas &g)
 void setup()
 {
     M5.begin();               // panel size becomes known here
+    // en: Draw a stable scene snapshot; tiled rendering can invoke the callback repeatedly.
+    // ja: 同じ状態のSceneを描きます。タイル描画ではコールバックが複数回呼ばれます。
     screen.render(drawScene); // first render allocates the tile buffer (guardrail)
 }
 

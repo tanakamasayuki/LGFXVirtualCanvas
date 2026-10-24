@@ -1,12 +1,5 @@
-// MemoryBudget — cap the tile buffer and handle allocation failure (M5Unified).
-//
-// setMemoryLimit() bounds the tile sprite to a byte budget; the library picks
-// the largest tile height that fits and splits accordingly. begin() returns
-// false if the request cannot be satisfied — there is NO fallback, so you can
-// detect breakage explicitly.
-//
-// Board: any M5 device (M5Unified / M5.Display).
-
+// en: Set a tile memory budget and handle allocation failure
+// ja: タイルのメモリ予算と確保失敗を扱う
 #include <M5Unified.h>
 #include <LGFXVirtualCanvas.h>
 
@@ -28,6 +21,8 @@ void setup()
 
     screen.setMemoryLimit(8 * 1024); // cap the tile buffer at 8 KB
 
+    // en: Initialize this component after its prerequisites; inspect the returned status where provided.
+    // ja: 前提となる機器を準備してから初期化し、結果を返すAPIでは成否を確認します。
     if (!screen.begin())
     {
         // No fallback: the budget could not be satisfied. Handle it yourself.
@@ -38,6 +33,8 @@ void setup()
     }
 
     Serial.printf("allocated: tiles=%d tileH=%d\n", screen.tileCount(), screen.tileHeight());
+    // en: Draw a stable scene snapshot; tiled rendering can invoke the callback repeatedly.
+    // ja: 同じ状態のSceneを描きます。タイル描画ではコールバックが複数回呼ばれます。
     screen.render(drawScene);
 }
 

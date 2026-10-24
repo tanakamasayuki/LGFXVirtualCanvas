@@ -1,19 +1,5 @@
-// DiffTransfer — skip transferring tiles that did not change (M5Unified).
-//
-// The scene is mostly static: a title, a frame, and a clock that only changes
-// once a second. With LGFXVirtualDiffMode::Tile, each tile is hashed after your
-// draw callback and its transfer is skipped when the hash matches the previous
-// render, so most frames only push the tiles the clock sits in.
-//
-// It reduces TRANSFER only: the draw callback still runs for every tile and
-// hashing is added on top. So it pays off on a large, slow panel (a Full-HD USB
-// display, say) and not on a small fast one — which is why it is off by default
-// and why this sketch prints the pushed/total ratio. On a Core2 (320x240 over
-// fast SPI) expect the ratio to drop but the frame rate to barely move; the
-// numbers are the point of the example.
-//
-// Board: any M5 device (M5Unified / M5.Display).
-
+// en: Skip transferring tiles whose content did not change
+// ja: 内容が変わらないタイルの転送を省く
 #include <M5Unified.h>
 #include <LGFXVirtualCanvas.h>
 
@@ -52,6 +38,8 @@ void setup()
     // Off by default; opt in explicitly.
     screen.setDiffMode(LGFXVirtualDiffMode::Tile);
 
+    // en: Initialize this component after its prerequisites; inspect the returned status where provided.
+    // ja: 前提となる機器を準備してから初期化し、結果を返すAPIでは成否を確認します。
     if (!screen.begin()) // optional: allocate now (tile buffers + hash table)
     {
         Serial.println("alloc failed");
@@ -75,6 +63,8 @@ void loop()
     }
     state.spinner++;
 
+    // en: Draw a stable scene snapshot; tiled rendering can invoke the callback repeatedly.
+    // ja: 同じ状態のSceneを描きます。タイル描画ではコールバックが複数回呼ばれます。
     screen.render(drawScene, state);
 
     // How much the diff actually saved on this frame.

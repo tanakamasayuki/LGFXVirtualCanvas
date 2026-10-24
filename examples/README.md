@@ -68,3 +68,20 @@ they all lay out from `g.width()` / `g.height()`.
 [bench/](../bench/) measures what split count, double buffering and PSRAM actually do on
 device (Core2 / CoreS3, printed as tables over serial). [tests/](../tests/) is where
 split-count independence of the output is verified, headless on the host.
+
+## Workflow and individual READMEs
+
+Start with the [example workflow](../docs/GUIDE_EXAMPLES.md), then choose the relevant sketch.
+
+A useful starting point is [HelloWorld](HelloWorld/README.md). Check its required hardware and choose another entry below if it does not match your setup.
+
+| Example | Learn |
+|---|---|
+| [BouncingBall](BouncingBall/README.md) | Animate state outside the tiled render callback |
+| [ColumnSplit](ColumnSplit/README.md) | Compare horizontal splitting, buffering and PSRAM choices |
+| [Dialog](Dialog/README.md) | Draw a transparent dialog and restore its background |
+| [DiffTransfer](DiffTransfer/README.md) | Skip transferring tiles whose content did not change |
+| [HelloWorld](HelloWorld/README.md) | Draw a first tiled full-screen scene |
+| [LovyanGFX_Basic](LovyanGFX_Basic/README.md) | Use a tiled screen with a plain LovyanGFX panel |
+| [MemoryBudget](MemoryBudget/README.md) | Set a tile memory budget and handle allocation failure |
+| [Viewport](Viewport/README.md) | Update a sprite region using local coordinates |

@@ -1,21 +1,5 @@
-// ColumnSplit — split the surface into columns instead of rows, and (optionally)
-// put the tile buffers in PSRAM (M5Unified).
-//
-// By default the canvas is cut into horizontal bands sent top to bottom. Some
-// targets want the opposite: a long strip fed out left to right (long-format
-// printing, a ticker, a wide waveform). setSplitAxis(Columns) makes each tile a
-// full-height vertical band and transfers them in that order. The draw callback
-// does not change at all — it still works in full-surface coordinates, and the
-// resulting image is identical to row splitting.
-//
-// The second half shows setUsePsram(true). On a large panel the internal-RAM
-// default resolves to many small tiles and the callback re-runs for every one of
-// them; PSRAM buys few large tiles instead. It is a trade, not a free win —
-// PSRAM is slower and LovyanGFX pushes a PSRAM sprite without DMA (so auto
-// double-buffering turns off). This sketch prints what was actually resolved.
-//
-// Board: any M5 device (M5Unified / M5.Display).
-
+// en: Compare horizontal splitting, buffering and PSRAM choices
+// ja: 横方向の分割・バッファ・PSRAMの違いを調べる
 #include <M5Unified.h>
 #include <LGFXVirtualCanvas.h>
 
@@ -57,7 +41,11 @@ void setup()
     // 1. Rows (the default): horizontal bands, top to bottom.
     {
         LGFXVirtualScreen screen(M5.Display);
+        // en: Initialize this component after its prerequisites; inspect the returned status where provided.
+        // ja: 前提となる機器を準備してから初期化し、結果を返すAPIでは成否を確認します。
         screen.begin();
+        // en: Draw a stable scene snapshot; tiled rendering can invoke the callback repeatedly.
+        // ja: 同じ状態のSceneを描きます。タイル描画ではコールバックが複数回呼ばれます。
         screen.render(drawStrip);
         report("rows", screen);
     }

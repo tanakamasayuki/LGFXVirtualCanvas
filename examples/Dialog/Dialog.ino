@@ -1,22 +1,5 @@
-// Dialog — draw a dialog over a screen without redrawing the screen (M5Unified).
-//
-// renderTransparent() fills the tile with the transparent color and pushes the
-// tile with that color masked out, so every pixel you did not draw keeps showing
-// whatever is already on the panel. That is what lets a *shaped* overlay (rounded
-// corners, a shadow) sit on top of an existing image: the corners are simply not
-// transferred.
-//
-// Note what this example does NOT do: it never re-renders the background while
-// the dialog is up. Press A to open, B to close — closing is the only moment the
-// background has to be drawn again.
-//
-// If your dialog were a plain rectangle you would not need transparency at all:
-// an LGFXVirtualSprite placed on it already transfers only that rectangle, and it
-// is faster. The best of both is what `dialog` below does — a sprite on the
-// dialog's bounding box, pushed transparently, so only that box is even scanned.
-//
-// Board: any M5 device (M5Unified / M5.Display).
-
+// en: Draw a transparent dialog and restore its background
+// ja: 透過Dialogを描き、閉じるときに背景を戻す
 #include <M5Unified.h>
 #include <LGFXVirtualCanvas.h>
 
@@ -75,11 +58,15 @@ void setup()
     dialog.setPosition((M5.Display.width() - DLG_W) / 2,
                        (M5.Display.height() - DLG_H) / 2);
 
+    // en: Initialize this component after its prerequisites; inspect the returned status where provided.
+    // ja: 前提となる機器を準備してから初期化し、結果を返すAPIでは成否を確認します。
     if (!background.begin() || !dialog.begin())
     {
         Serial.println("alloc failed");
         return;
     }
+    // en: Draw a stable scene snapshot; tiled rendering can invoke the callback repeatedly.
+    // ja: 同じ状態のSceneを描きます。タイル描画ではコールバックが複数回呼ばれます。
     background.render(drawBackground, state);
 }
 
@@ -92,6 +79,8 @@ void loop()
         state.dialogOpen = true;
         // The background is left exactly as it is on the panel; only the pixels
         // the dialog actually draws are transferred.
+        // en: Draw only non-key pixels and restore the background separately when closing the overlay.
+        // ja: 抜け色以外を描き、Overlayを閉じる際の背景復元は別に行います。
         dialog.renderTransparent(drawDialog);
         Serial.printf("dialog: %u / %u px pushed (an upper bound: transparent "
                       "pixels inside those tiles are not sent)\n",

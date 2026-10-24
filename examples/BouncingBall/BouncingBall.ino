@@ -1,11 +1,5 @@
-// BouncingBall — animation with application state (M5Unified).
-//
-// Shows the recommended pattern: keep state in your own struct, update it,
-// then render a pure View function that takes the state by reference. The
-// draw function is split-agnostic — it just draws to the virtual screen.
-//
-// Board: any M5 device (M5Unified / M5.Display).
-
+// en: Animate state outside the tiled render callback
+// ja: 状態を描画の外で更新してBallを動かす
 #include <M5Unified.h>
 #include <LGFXVirtualCanvas.h>
 
@@ -43,12 +37,16 @@ void setup()
 {
     M5.begin();
     screen.setMemoryLimit(16 * 1024); // optional: cap the tile buffer at 16 KB
+    // en: Initialize this component after its prerequisites; inspect the returned status where provided.
+    // ja: 前提となる機器を準備してから初期化し、結果を返すAPIでは成否を確認します。
     screen.begin();                   // optional: allocate now instead of on first render
 }
 
 void loop()
 {
     update(ball, M5.Display.width(), M5.Display.height());
+    // en: Draw a stable scene snapshot; tiled rendering can invoke the callback repeatedly.
+    // ja: 同じ状態のSceneを描きます。タイル描画ではコールバックが複数回呼ばれます。
     screen.render(drawScene, ball);
     delay(16);
 }
